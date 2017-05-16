@@ -1,4 +1,5 @@
 ﻿using LineBotCompanyTrip.Configurations;
+using LineBotCompanyTrip.Services.Emotion;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.Net;
@@ -66,9 +67,14 @@ namespace LineBotCompanyTrip.Controllers {
 			}
 			#endregion
 
+			string imageUrl = "";
+
+			EmotionService emotionService = new EmotionService();
+			string emotionResult = await emotionService.Call( imageUrl );
+
 			#region 通知に対するリプライを返す
 			{
-				StringContent content = this.createContent( replyToken );
+				StringContent content = this.CreateContent( replyToken , emotionResult );
 				
 				HttpClient client = new HttpClient();
 				client.DefaultRequestHeaders.Accept.Add( new MediaTypeWithQualityHeaderValue( "application/json" ) );
@@ -89,14 +95,15 @@ namespace LineBotCompanyTrip.Controllers {
 		/// 返信用Content作成
 		/// </summary>
 		/// <param name="replyToken">リプライトークン</param>
+		/// <param name="messageText">リプライトークン</param>
 		/// <returns>Content</returns>
-		private StringContent createContent( string replyToken ) {
+		private StringContent CreateContent( string replyToken , string messageText ) {
 
 			RequestOfReplyMessage requestObject = new RequestOfReplyMessage();
 			requestObject.replyToken = replyToken;
 			RequestOfReplyMessage.Message message = new RequestOfReplyMessage.Message();
 			message.type = "text";
-			message.text = "test";
+			message.text = messageText;
 			requestObject.messages = new RequestOfReplyMessage.Message[ 1 ];
 			requestObject.messages[ 0 ] = message;
 
@@ -107,8 +114,7 @@ namespace LineBotCompanyTrip.Controllers {
 			return content;
 
 		}
-
-
+		
 	}
 
 }

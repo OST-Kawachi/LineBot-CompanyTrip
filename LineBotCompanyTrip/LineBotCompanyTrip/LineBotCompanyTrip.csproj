@@ -114,11 +114,14 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="App_Start\WebApiConfig.cs" />
+    <Compile Include="Configurations\EmotionConfig.cs" />
+    <Compile Include="Configurations\LineBotConfig.cs" />
     <Compile Include="Controllers\WebhookController.cs" />
     <Compile Include="Global.asax.cs">
       <DependentUpon>Global.asax</DependentUpon>
     </Compile>
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Services\Emotion\EmotionService.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="packages.config" />
