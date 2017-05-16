@@ -1,6 +1,9 @@
 ﻿using LineBotCompanyTrip.Configurations;
+using LineBotCompanyTrip.Services.Emotion;
+using LineBotCompanyTrip.Services.LineBot;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -13,7 +16,7 @@ namespace LineBotCompanyTrip.Controllers {
 	/// LINE BotからのWebhook送信先API
 	/// </summary>
 	public class WebhookController : ApiController {
-
+		
 		/// <summary>
 		/// Reply Messageに使用するリクエストEntity
 		/// </summary>
@@ -54,60 +57,73 @@ namespace LineBotCompanyTrip.Controllers {
 		/// <param name="requestToken">リクエストトークン</param>
 		/// <returns>常にステータス200のみを返す</returns>
 		public async Task<HttpResponseMessage> Post( JToken requestToken ) {
+
+			Trace.TraceInformation( "Webhook API 開始" );
+			Trace.TraceInformation( "Request Token is " + requestToken.ToString() );
 			
-			#region 入力チェックと通知から必要な情報の取得
-			string replyToken = "";
-			string sentMessage = "";
-			{
-				foreach( JToken events in requestToken[ "events" ] ) {
-					replyToken = events[ "replyToken" ].ToString();
-					sentMessage = events[ "message" ][ "text" ].ToString();
+			LineBotService lineBotService = new LineBotService();
+
+
+			JToken firstEventToken = requestToken?[ "events" ]?[0];
+
+			#region イベントの入力チェック
+			if( firstEventToken == null ) {
+				Trace.TraceInformation( "無効なイベント" );
+				return new HttpResponseMessage( HttpStatusCode.OK );
+			}
+			#endregion
+			
+			#region フォローイベント
+			if( "follow".Equals( firstEventToken[ "type" ].ToString() ) ) {
+				Trace.TraceInformation( "フォローイベント通知" );
+				await lineBotService.CallFollowEvent( firstEventToken[ "replyToken" ].ToString() );
+				return new HttpResponseMessage( HttpStatusCode.OK );
+			}
+			#endregion
+
+			#region グループ追加イベント
+			if( "join".Equals( firstEventToken[ "type" ].ToString() ) ) {
+				Trace.TraceInformation( "グループ追加イベント通知" );
+				await lineBotService.CallJoinEvent( firstEventToken[ "replyToken" ].ToString() );
+				return new HttpResponseMessage( HttpStatusCode.OK );
+			}
+			#endregion
+
+			#region メッセージイベント
+			if( "message".Equals( firstEventToken[ "type" ].ToString() ) ) {
+
+				#region メッセージイベントの入力チェック
+				if( firstEventToken[ "message" ] == null ) {
+					Trace.TraceInformation( "無効なイベント" );
+					return new HttpResponseMessage( HttpStatusCode.OK );
 				}
+				#endregion
+
+				#region テキストメッセージ
+				if( "text".Equals( firstEventToken[ "message" ][ "type" ]?.ToString() ) ) {
+					Trace.TraceInformation( "メッセージイベント通知－テキスト" );
+					await lineBotService.CallTextMessageEvent( firstEventToken[ "replyToken" ].ToString() , firstEventToken[ "message" ][ "text" ].ToString() );
+					return new HttpResponseMessage( HttpStatusCode.OK );
+				}
+				#endregion
+
+				#region 画像メッセージ
+				if( "image".Equals( firstEventToken[ "message" ][ "type" ]?.ToString() ) ) {
+					Trace.TraceInformation( "メッセージイベント通知－画像" );
+					await lineBotService.CallImageMessageEvent( firstEventToken[ "replyToken" ].ToString() , firstEventToken[ "message" ][ "id" ].ToString() );
+					return new HttpResponseMessage( HttpStatusCode.OK );
+				}
+				#endregion
+
 			}
 			#endregion
 
-			#region 通知に対するリプライを返す
-			{
-				StringContent content = this.createContent( replyToken );
-				
-				HttpClient client = new HttpClient();
-				client.DefaultRequestHeaders.Accept.Add( new MediaTypeWithQualityHeaderValue( "application/json" ) );
-				client.DefaultRequestHeaders.Add( "Authorization" , "Bearer {" + LineBotConfig.ChannelAccessToken + "}" );
-
-				HttpResponseMessage response = await client.PostAsync( LineBotConfig.ReplyMessageUrl , content ).ConfigureAwait( false );
-				string result = await response.Content.ReadAsStringAsync().ConfigureAwait( false );
-					
-			}
-			#endregion
+			Trace.TraceInformation( "指定イベントでない" );
 
 			//常にステータス200を返す
 			return new HttpResponseMessage( HttpStatusCode.OK );
-
-		}
-
-		/// <summary>
-		/// 返信用Content作成
-		/// </summary>
-		/// <param name="replyToken">リプライトークン</param>
-		/// <returns>Content</returns>
-		private StringContent createContent( string replyToken ) {
-
-			RequestOfReplyMessage requestObject = new RequestOfReplyMessage();
-			requestObject.replyToken = replyToken;
-			RequestOfReplyMessage.Message message = new RequestOfReplyMessage.Message();
-			message.type = "text";
-			message.text = "test";
-			requestObject.messages = new RequestOfReplyMessage.Message[ 1 ];
-			requestObject.messages[ 0 ] = message;
-
-			string jsonRequest = JsonConvert.SerializeObject( requestObject );
-			StringContent content = new StringContent( jsonRequest );
-			content.Headers.ContentType = new MediaTypeHeaderValue( "application/json" );
 			
-			return content;
-
 		}
-
 
 	}
 
