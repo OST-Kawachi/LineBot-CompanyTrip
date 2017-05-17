@@ -6,7 +6,6 @@ using Newtonsoft.Json.Linq;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http;
-using System.Net.Http.Headers;
 using System.Threading.Tasks;
 using System.Web.Http;
 
@@ -18,40 +17,6 @@ namespace LineBotCompanyTrip.Controllers {
 	public class WebhookController : ApiController {
 		
 		/// <summary>
-		/// Reply Messageに使用するリクエストEntity
-		/// </summary>
-		private class RequestOfReplyMessage {
-
-			/// <summary>
-			/// リプライメッセージ
-			/// </summary>
-			public class Message {
-
-				/// <summary>
-				/// メッセージ種別
-				/// </summary>
-				public string type;
-
-				/// <summary>
-				/// メッセージ本文
-				/// </summary>
-				public string text;
-
-			}
-
-			/// <summary>
-			/// 返信に必要なリプライトークン
-			/// </summary>
-			public string replyToken;
-
-			/// <summary>
-			/// リプライメッセージ(最大5通)
-			/// </summary>
-			public Message[] messages;
-
-		}
-
-		/// <summary>
 		/// POSTメソッド
 		/// </summary>
 		/// <param name="requestToken">リクエストトークン</param>
@@ -62,7 +27,6 @@ namespace LineBotCompanyTrip.Controllers {
 			Trace.TraceInformation( "Request Token is " + requestToken.ToString() );
 			
 			LineBotService lineBotService = new LineBotService();
-
 
 			JToken firstEventToken = requestToken?[ "events" ]?[0];
 
@@ -119,8 +83,7 @@ namespace LineBotCompanyTrip.Controllers {
 			#endregion
 
 			Trace.TraceInformation( "指定イベントでない" );
-
-			//常にステータス200を返す
+			
 			return new HttpResponseMessage( HttpStatusCode.OK );
 			
 		}
