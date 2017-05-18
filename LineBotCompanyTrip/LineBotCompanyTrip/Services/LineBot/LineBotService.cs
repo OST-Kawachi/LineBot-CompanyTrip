@@ -1,5 +1,6 @@
 ﻿using LineBotCompanyTrip.Configurations;
 using LineBotCompanyTrip.Services.Emotion;
+using LineBotCompanyTrip.Models.LineBot.ReplyMessage;
 using Newtonsoft.Json;
 using System.IO;
 using System.Net.Http;
@@ -12,41 +13,7 @@ namespace LineBotCompanyTrip.Services.LineBot {
 	/// LINE Botに関するサービス
 	/// </summary>
 	public class LineBotService {
-
-		/// <summary>
-		/// Reply Messageに使用するリクエストEntity
-		/// </summary>
-		public class RequestOfReplyMessage {
-
-			/// <summary>
-			/// リプライメッセージ
-			/// </summary>
-			public class Message {
-
-				/// <summary>
-				/// メッセージ種別
-				/// </summary>
-				public string type;
-
-				/// <summary>
-				/// メッセージ本文
-				/// </summary>
-				public string text;
-
-			}
-
-			/// <summary>
-			/// 返信に必要なリプライトークン
-			/// </summary>
-			public string replyToken;
-
-			/// <summary>
-			/// リプライメッセージ(最大5通)
-			/// </summary>
-			public Message[] messages;
-
-		}
-
+		
 		/// <summary>
 		/// フォロー時のイベント
 		/// </summary>
