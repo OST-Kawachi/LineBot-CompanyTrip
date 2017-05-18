@@ -32,6 +32,26 @@ namespace LineBotCompanyTrip.Models.Webhook {
 				/// </summary>
 				public string text { set; get; }
 
+				/// <summary>
+				/// タイトル
+				/// </summary>
+				public string title { set; get; }
+
+				/// <summary>
+				/// 住所
+				/// </summary>
+				public string address { set; get; }
+
+				/// <summary>
+				/// 緯度
+				/// </summary>
+				public double latitude { set; get; }
+
+				/// <summary>
+				/// 経度
+				/// </summary>
+				public double longitude { set; get; }
+				
 			}
 
 			/// <summary>
