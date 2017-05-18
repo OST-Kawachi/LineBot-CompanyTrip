@@ -1,12 +1,8 @@
-﻿using LineBotCompanyTrip.Configurations;
-using LineBotCompanyTrip.Services.Emotion;
-using LineBotCompanyTrip.Services.LineBot;
-using Newtonsoft.Json;
+﻿using LineBotCompanyTrip.Services.LineBot;
 using Newtonsoft.Json.Linq;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http;
-using System.Net.Http.Headers;
 using System.Threading.Tasks;
 using System.Web.Http;
 
