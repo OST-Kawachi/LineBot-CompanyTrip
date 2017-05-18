@@ -1,8 +1,7 @@
-﻿
-using LineBotCompanyTrip.Configurations;
+﻿using LineBotCompanyTrip.Configurations;
 using LineBotCompanyTrip.Services.Emotion;
+using LineBotCompanyTrip.Models.LineBot.ReplyMessage;
 using Newtonsoft.Json;
-using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -14,41 +13,7 @@ namespace LineBotCompanyTrip.Services.LineBot {
 	/// LINE Botに関するサービス
 	/// </summary>
 	public class LineBotService {
-
-		/// <summary>
-		/// Reply Messageに使用するリクエストEntity
-		/// </summary>
-		public class RequestOfReplyMessage {
-
-			/// <summary>
-			/// リプライメッセージ
-			/// </summary>
-			public class Message {
-
-				/// <summary>
-				/// メッセージ種別
-				/// </summary>
-				public string type;
-
-				/// <summary>
-				/// メッセージ本文
-				/// </summary>
-				public string text;
-
-			}
-
-			/// <summary>
-			/// 返信に必要なリプライトークン
-			/// </summary>
-			public string replyToken;
-
-			/// <summary>
-			/// リプライメッセージ(最大5通)
-			/// </summary>
-			public Message[] messages;
-
-		}
-
+		
 		/// <summary>
 		/// フォロー時のイベント
 		/// </summary>
@@ -142,15 +107,14 @@ namespace LineBotCompanyTrip.Services.LineBot {
 		/// <returns></returns>
 		public async Task CallImageMessageEvent( string replyToken , string messageId ) {
 
-			#region 画像のバイナリデータを取得
-			Stream binaryImage = await this.GetContent( messageId );
-			Trace.TraceInformation( "Binary Image is : " + binaryImage );
+			#region 画像のバイナリデータをEmotion APIより解析
+			string emotionResult = "";
+			{
+				Stream binaryImage = await this.GetContent( messageId );
+				emotionResult = await new EmotionService().Call( binaryImage );
+			}
 			#endregion
 			
-			#region Emotion APIより画像を解析する
-			string emotionResult = await new EmotionService().Call( binaryImage );
-			#endregion
-
 			#region 解析結果を通知する
 			{
 
@@ -176,6 +140,48 @@ namespace LineBotCompanyTrip.Services.LineBot {
 			}
 			#endregion
 
+		}
+
+		/// <summary>
+		/// 位置情報メッセージ通知時のイベント
+		/// </summary>
+		/// <param name="replyToken">リプライトークン</param>
+		/// <param name="title">タイトル</param>
+		/// <param name="address">住所</param>
+		/// <param name="latitude">緯度</param>
+		/// <param name="longitude">経度</param>
+		/// <returns></returns>
+		public async Task CallLocationMessageEvent( string replyToken , string title , string address , double latitude , double longitude ) {
+
+			#region 通知する
+			{
+
+				RequestOfReplyMessage requestObject = new RequestOfReplyMessage();
+				requestObject.replyToken = replyToken;
+				RequestOfReplyMessage.Message message = new RequestOfReplyMessage.Message();
+				message.type = "text";
+				message.text = "位置情報が送られてきました\n" +
+					"タイトル：" + title + "\n" +
+					"住所：" + address + "\n" +
+					"緯度：" + latitude + "\n" +
+					"経度：" + longitude;
+				requestObject.messages = new RequestOfReplyMessage.Message[ 1 ];
+				requestObject.messages[ 0 ] = message;
+
+				string jsonRequest = JsonConvert.SerializeObject( requestObject );
+				StringContent content = new StringContent( jsonRequest );
+				content.Headers.ContentType = new MediaTypeHeaderValue( "application/json" );
+
+				HttpClient client = new HttpClient();
+				client.DefaultRequestHeaders.Accept.Add( new MediaTypeWithQualityHeaderValue( "application/json" ) );
+				client.DefaultRequestHeaders.Add( "Authorization" , "Bearer {" + LineBotConfig.ChannelAccessToken + "}" );
+
+				HttpResponseMessage response = await client.PostAsync( LineBotConfig.ReplyMessageUrl , content ).ConfigureAwait( false );
+				string result = await response.Content.ReadAsStringAsync().ConfigureAwait( false );
+
+			}
+			#endregion
+			
 		}
 
 		/// <summary>

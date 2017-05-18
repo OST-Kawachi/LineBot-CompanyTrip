@@ -1,5 +1,4 @@
 ﻿using LineBotCompanyTrip.Configurations;
-using Newtonsoft.Json;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -13,31 +12,11 @@ namespace LineBotCompanyTrip.Services.Emotion {
 	public class EmotionService {
 
 		/// <summary>
-		/// EmotionAPIに使用するリクエストEntity
-		/// </summary>
-		private class RequestsOfEmotion {
-
-			/// <summary>
-			/// URL
-			/// </summary>
-			public string url;
-
-		}
-
-		/// <summary>
 		/// Emotion APIを呼び出す
 		/// </summary>
 		/// <param name="binaryImage">画像のバイナリデータ</param>
 		/// <returns>APIレスポンス</returns>
 		public async Task<string> Call( Stream binaryImage ) {
-
-			/*
-			RequestsOfEmotion requestObject = new RequestsOfEmotion();
-			requestObject.url = binaryImage;
-			string jsonRequest = JsonConvert.SerializeObject( requestObject );
-			StringContent content = new StringContent( binaryImage );
-			*/
-
 
 			StreamContent content = new StreamContent( binaryImage );
 			content.Headers.ContentType = new MediaTypeHeaderValue( "application/octet-stream" );
