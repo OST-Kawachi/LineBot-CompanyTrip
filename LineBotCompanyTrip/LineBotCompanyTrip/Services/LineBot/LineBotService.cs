@@ -1,7 +1,5 @@
 ﻿using LineBotCompanyTrip.Configurations;
 using LineBotCompanyTrip.Services.Emotion;
-using LineBotCompanyTrip.Models.LineBot.ReplyMessage;
-using Newtonsoft.Json;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -25,24 +23,11 @@ namespace LineBotCompanyTrip.Services.LineBot {
 		/// <returns></returns>
 		public async Task CallFollowEvent( string replyToken ) {
 
-			RequestOfReplyMessage requestObject = new RequestOfReplyMessage();
-			requestObject.replyToken = replyToken;
-			RequestOfReplyMessage.Message message = new RequestOfReplyMessage.Message();
-			message.type = "text";
-			message.text = "友達追加ありがとうございます！\n仲良くしてくださいね！";
-			requestObject.messages = new RequestOfReplyMessage.Message[ 1 ];
-			requestObject.messages[ 0 ] = message;
-
-			string jsonRequest = JsonConvert.SerializeObject( requestObject );
-			StringContent content = new StringContent( jsonRequest );
-			content.Headers.ContentType = new MediaTypeHeaderValue( "application/json" );
-			
-			HttpClient client = new HttpClient();
-			client.DefaultRequestHeaders.Accept.Add( new MediaTypeWithQualityHeaderValue( "application/json" ) );
-			client.DefaultRequestHeaders.Add( "Authorization" , "Bearer {" + LineBotConfig.ChannelAccessToken + "}" );
-
-			HttpResponseMessage response = await client.PostAsync( LineBotConfig.ReplyMessageUrl , content ).ConfigureAwait( false );
-			string result = await response.Content.ReadAsStringAsync().ConfigureAwait( false );
+			ReplyMessageService replyMessageService = new ReplyMessageService( replyToken );
+			await replyMessageService
+				.AddTextMessage( "友達追加ありがとうございます！" )
+				.AddTextMessage( "仲良くしてくださいね！" )
+				.Send();
 			
 		}
 
@@ -53,24 +38,11 @@ namespace LineBotCompanyTrip.Services.LineBot {
 		/// <returns></returns>
 		public async Task CallJoinEvent( string replyToken ) {
 
-			RequestOfReplyMessage requestObject = new RequestOfReplyMessage();
-			requestObject.replyToken = replyToken;
-			RequestOfReplyMessage.Message message = new RequestOfReplyMessage.Message();
-			message.type = "text";
-			message.text = "グループ追加ありがとう！\n仲良くしてくださいね！";
-			requestObject.messages = new RequestOfReplyMessage.Message[ 1 ];
-			requestObject.messages[ 0 ] = message;
-
-			string jsonRequest = JsonConvert.SerializeObject( requestObject );
-			StringContent content = new StringContent( jsonRequest );
-			content.Headers.ContentType = new MediaTypeHeaderValue( "application/json" );
-
-			HttpClient client = new HttpClient();
-			client.DefaultRequestHeaders.Accept.Add( new MediaTypeWithQualityHeaderValue( "application/json" ) );
-			client.DefaultRequestHeaders.Add( "Authorization" , "Bearer {" + LineBotConfig.ChannelAccessToken + "}" );
-
-			HttpResponseMessage response = await client.PostAsync( LineBotConfig.ReplyMessageUrl , content ).ConfigureAwait( false );
-			string result = await response.Content.ReadAsStringAsync().ConfigureAwait( false );
+			ReplyMessageService replyMessageService = new ReplyMessageService( replyToken );
+			await replyMessageService
+				.AddTextMessage( "グループ追加ありがとうございます！" )
+				.AddTextMessage( "仲良くしてくださいね！" )
+				.Send();
 
 		}
 
@@ -82,24 +54,11 @@ namespace LineBotCompanyTrip.Services.LineBot {
 		/// <returns></returns>
 		public async Task CallTextMessageEvent( string replyToken , string sentMessage ) {
 
-			RequestOfReplyMessage requestObject = new RequestOfReplyMessage();
-			requestObject.replyToken = replyToken;
-			RequestOfReplyMessage.Message message = new RequestOfReplyMessage.Message();
-			message.type = "text";
-			message.text = "メッセージ送られてきました！\n" + sentMessage;
-			requestObject.messages = new RequestOfReplyMessage.Message[ 1 ];
-			requestObject.messages[ 0 ] = message;
-
-			string jsonRequest = JsonConvert.SerializeObject( requestObject );
-			StringContent content = new StringContent( jsonRequest );
-			content.Headers.ContentType = new MediaTypeHeaderValue( "application/json" );
-
-			HttpClient client = new HttpClient();
-			client.DefaultRequestHeaders.Accept.Add( new MediaTypeWithQualityHeaderValue( "application/json" ) );
-			client.DefaultRequestHeaders.Add( "Authorization" , "Bearer {" + LineBotConfig.ChannelAccessToken + "}" );
-
-			HttpResponseMessage response = await client.PostAsync( LineBotConfig.ReplyMessageUrl , content ).ConfigureAwait( false );
-			string result = await response.Content.ReadAsStringAsync().ConfigureAwait( false );
+			ReplyMessageService replyMessageService = new ReplyMessageService( replyToken );
+			await replyMessageService
+				.AddTextMessage( "メッセージ送られてきました！" )
+				.AddTextMessage( sentMessage )
+				.Send();
 
 		}
 
@@ -123,13 +82,7 @@ namespace LineBotCompanyTrip.Services.LineBot {
 			#region 解析結果を通知する
 			{
 
-				RequestOfReplyMessage requestObject = new RequestOfReplyMessage();
-				requestObject.replyToken = replyToken;
-				RequestOfReplyMessage.Message message = new RequestOfReplyMessage.Message();
-				message.type = "text";
-
-				#region テキストの作成
-				message.text = "画像が送られてきました";
+				string sendText = "";
 				foreach( ResponseOfEmotionAPI resultOfEmotion in emotionResult ) {
 					string text = "\n"
 						+ "座標：( " + resultOfEmotion.faceRectangle.left + " , " + resultOfEmotion.faceRectangle.top + " )\n"
@@ -141,23 +94,14 @@ namespace LineBotCompanyTrip.Services.LineBot {
 						+ "うんざり度：" + CommonUtil.ConvertDecimalIntoPercentage( resultOfEmotion.scores.disgust ) + "\n"
 						+ "真顔度：" + CommonUtil.ConvertDecimalIntoPercentage( resultOfEmotion.scores.neutral ) + "\n"
 						+ "驚き度：" + CommonUtil.ConvertDecimalIntoPercentage( resultOfEmotion.scores.surprise ) + "\n";
-					message.text += text;
+					sendText += text;
 				}
-				#endregion
-				
-				requestObject.messages = new RequestOfReplyMessage.Message[ 1 ];
-				requestObject.messages[ 0 ] = message;
 
-				string jsonRequest = JsonConvert.SerializeObject( requestObject );
-				StringContent content = new StringContent( jsonRequest );
-				content.Headers.ContentType = new MediaTypeHeaderValue( "application/json" );
-
-				HttpClient client = new HttpClient();
-				client.DefaultRequestHeaders.Accept.Add( new MediaTypeWithQualityHeaderValue( "application/json" ) );
-				client.DefaultRequestHeaders.Add( "Authorization" , "Bearer {" + LineBotConfig.ChannelAccessToken + "}" );
-
-				HttpResponseMessage response = await client.PostAsync( LineBotConfig.ReplyMessageUrl , content ).ConfigureAwait( false );
-				string result = await response.Content.ReadAsStringAsync().ConfigureAwait( false );
+				ReplyMessageService replyMessageService = new ReplyMessageService( replyToken );
+				await replyMessageService
+					.AddTextMessage( "画像が送られてきました！" )
+					.AddTextMessage( sendText )
+					.Send();
 
 			}
 			#endregion
@@ -175,35 +119,18 @@ namespace LineBotCompanyTrip.Services.LineBot {
 		/// <returns></returns>
 		public async Task CallLocationMessageEvent( string replyToken , string title , string address , double latitude , double longitude ) {
 
-			#region 通知する
-			{
+			string text = "" +
+				"タイトル：" + title + "\n" +
+				"住所：" + address + "\n" +
+				"緯度：" + latitude + "\n" +
+				"経度：" + longitude;
 
-				RequestOfReplyMessage requestObject = new RequestOfReplyMessage();
-				requestObject.replyToken = replyToken;
-				RequestOfReplyMessage.Message message = new RequestOfReplyMessage.Message();
-				message.type = "text";
-				message.text = "位置情報が送られてきました\n" +
-					"タイトル：" + title + "\n" +
-					"住所：" + address + "\n" +
-					"緯度：" + latitude + "\n" +
-					"経度：" + longitude;
-				requestObject.messages = new RequestOfReplyMessage.Message[ 1 ];
-				requestObject.messages[ 0 ] = message;
+			ReplyMessageService replyMessageService = new ReplyMessageService( replyToken );
+			await replyMessageService
+				.AddTextMessage( "位置情報が送られてきました！" )
+				.AddTextMessage( text )
+				.Send();
 
-				string jsonRequest = JsonConvert.SerializeObject( requestObject );
-				StringContent content = new StringContent( jsonRequest );
-				content.Headers.ContentType = new MediaTypeHeaderValue( "application/json" );
-
-				HttpClient client = new HttpClient();
-				client.DefaultRequestHeaders.Accept.Add( new MediaTypeWithQualityHeaderValue( "application/json" ) );
-				client.DefaultRequestHeaders.Add( "Authorization" , "Bearer {" + LineBotConfig.ChannelAccessToken + "}" );
-
-				HttpResponseMessage response = await client.PostAsync( LineBotConfig.ReplyMessageUrl , content ).ConfigureAwait( false );
-				string result = await response.Content.ReadAsStringAsync().ConfigureAwait( false );
-
-			}
-			#endregion
-			
 		}
 
 		/// <summary>
@@ -223,7 +150,7 @@ namespace LineBotCompanyTrip.Services.LineBot {
 			return result;
 			
 		}
-
+		
 	}
 
 }
