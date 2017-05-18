@@ -20,7 +20,7 @@ namespace LineBotCompanyTrip.Services.Emotion {
 
 			StreamContent content = new StreamContent( binaryImage );
 			content.Headers.ContentType = new MediaTypeHeaderValue( "application/octet-stream" );
-
+			
 			HttpClient client = new HttpClient();
 			client.DefaultRequestHeaders.Accept.Add( new MediaTypeWithQualityHeaderValue( "application/octet-stream" ) );
 			client.DefaultRequestHeaders.Add( "Ocp-Apim-Subscription-Key" , EmotionConfig.OcpApimSubscriptionKey );
@@ -30,7 +30,7 @@ namespace LineBotCompanyTrip.Services.Emotion {
 			return result;
 
 		}
-
+		
 	}
 
 }

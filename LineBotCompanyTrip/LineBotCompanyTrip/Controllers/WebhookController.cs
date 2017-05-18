@@ -80,8 +80,7 @@ namespace LineBotCompanyTrip.Controllers {
 			#endregion
 
 			Trace.TraceInformation( "指定イベントでない" );
-
-			//常にステータス200を返す
+			
 			return new HttpResponseMessage( HttpStatusCode.OK );
 			
 		}

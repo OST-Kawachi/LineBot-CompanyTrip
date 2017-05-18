@@ -1,8 +1,6 @@
-﻿
-using LineBotCompanyTrip.Configurations;
+﻿using LineBotCompanyTrip.Configurations;
 using LineBotCompanyTrip.Services.Emotion;
 using Newtonsoft.Json;
-using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -190,9 +188,9 @@ namespace LineBotCompanyTrip.Services.LineBot {
 
 			HttpResponseMessage response = await client.GetAsync( LineBotConfig.GetContentUrl( messageId ) ).ConfigureAwait( false );
 			Stream result = await response.Content.ReadAsStreamAsync().ConfigureAwait( false );
-
+		
 			return result;
-
+			
 		}
 
 	}
