@@ -1,5 +1,6 @@
 ﻿using LineBotCompanyTrip.Configurations;
 using Newtonsoft.Json;
+using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading.Tasks;
@@ -22,22 +23,27 @@ namespace LineBotCompanyTrip.Services.Emotion {
 			public string url;
 
 		}
-		
+
 		/// <summary>
 		/// Emotion APIを呼び出す
 		/// </summary>
-		/// <param name="imageUrl">画像パス</param>
+		/// <param name="binaryImage">画像のバイナリデータ</param>
 		/// <returns>APIレスポンス</returns>
-		public async Task<string> Call( string imageUrl ) {
+		public async Task<string> Call( Stream binaryImage ) {
 
+			/*
 			RequestsOfEmotion requestObject = new RequestsOfEmotion();
-			requestObject.url = imageUrl;
+			requestObject.url = binaryImage;
 			string jsonRequest = JsonConvert.SerializeObject( requestObject );
-			StringContent content = new StringContent( jsonRequest );
-			content.Headers.ContentType = new MediaTypeHeaderValue( "application/json" );
+			StringContent content = new StringContent( binaryImage );
+			*/
+
+
+			StreamContent content = new StreamContent( binaryImage );
+			content.Headers.ContentType = new MediaTypeHeaderValue( "application/octet-stream" );
 			
 			HttpClient client = new HttpClient();
-			client.DefaultRequestHeaders.Accept.Add( new MediaTypeWithQualityHeaderValue( "application/json" ) );
+			client.DefaultRequestHeaders.Accept.Add( new MediaTypeWithQualityHeaderValue( "application/octet-stream" ) );
 			client.DefaultRequestHeaders.Add( "Ocp-Apim-Subscription-Key" , EmotionConfig.OcpApimSubscriptionKey );
 
 			HttpResponseMessage response = await client.PostAsync( EmotionConfig.EmotionApiUrl , content ).ConfigureAwait( false );
