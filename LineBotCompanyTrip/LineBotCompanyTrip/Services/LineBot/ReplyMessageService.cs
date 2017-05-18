@@ -67,6 +67,36 @@ namespace LineBotCompanyTrip.Services.LineBot {
 		}
 
 		/// <summary>
+		/// 画像メッセージを送信リストに追加する
+		/// 初回以外は配列を拡大させながら追加する
+		/// 5通目以降は追加されない
+		/// </summary>
+		/// <param name="originalContentUrl"></param>
+		/// <param name="previewImageUrl"></param>
+		/// <returns></returns>
+		public ReplyMessageService AddImageMessage( string originalContentUrl , string previewImageUrl ) {
+
+			if( this.MessagesIndex == 5 ) {
+				Trace.TraceInformation( "5通以上送信できません" );
+				return this;
+			}
+			else if( this.MessagesIndex != 0 ) {
+				Array.Resize<RequestOfReplyMessage.Message>( ref this.Request.messages , this.MessagesIndex + 1 );
+			}
+
+			RequestOfReplyMessage.Message message = new RequestOfReplyMessage.Message();
+			message.type = "image";
+			message.originalContentUrl = originalContentUrl;
+			message.previewImageUrl = previewImageUrl;
+
+			this.Request.messages[ this.MessagesIndex ] = message;
+			this.MessagesIndex++;
+
+			return this;
+
+		}
+
+		/// <summary>
 		/// メッセージの送信
 		/// </summary>
 		/// <returns></returns>
