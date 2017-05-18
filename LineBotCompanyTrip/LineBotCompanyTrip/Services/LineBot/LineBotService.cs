@@ -143,6 +143,48 @@ namespace LineBotCompanyTrip.Services.LineBot {
 		}
 
 		/// <summary>
+		/// 位置情報メッセージ通知時のイベント
+		/// </summary>
+		/// <param name="replyToken">リプライトークン</param>
+		/// <param name="title">タイトル</param>
+		/// <param name="address">住所</param>
+		/// <param name="latitude">緯度</param>
+		/// <param name="longitude">経度</param>
+		/// <returns></returns>
+		public async Task CallLocationMessageEvent( string replyToken , string title , string address , double latitude , double longitude ) {
+
+			#region 通知する
+			{
+
+				RequestOfReplyMessage requestObject = new RequestOfReplyMessage();
+				requestObject.replyToken = replyToken;
+				RequestOfReplyMessage.Message message = new RequestOfReplyMessage.Message();
+				message.type = "text";
+				message.text = "位置情報が送られてきました\n" +
+					"タイトル：" + title + "\n" +
+					"住所：" + address + "\n" +
+					"緯度：" + latitude + "\n" +
+					"経度：" + longitude;
+				requestObject.messages = new RequestOfReplyMessage.Message[ 1 ];
+				requestObject.messages[ 0 ] = message;
+
+				string jsonRequest = JsonConvert.SerializeObject( requestObject );
+				StringContent content = new StringContent( jsonRequest );
+				content.Headers.ContentType = new MediaTypeHeaderValue( "application/json" );
+
+				HttpClient client = new HttpClient();
+				client.DefaultRequestHeaders.Accept.Add( new MediaTypeWithQualityHeaderValue( "application/json" ) );
+				client.DefaultRequestHeaders.Add( "Authorization" , "Bearer {" + LineBotConfig.ChannelAccessToken + "}" );
+
+				HttpResponseMessage response = await client.PostAsync( LineBotConfig.ReplyMessageUrl , content ).ConfigureAwait( false );
+				string result = await response.Content.ReadAsStringAsync().ConfigureAwait( false );
+
+			}
+			#endregion
+			
+		}
+
+		/// <summary>
 		/// Contentから画像、動画、音声にアクセスするAPIを呼び、バイナリデータを返す
 		/// </summary>
 		/// <param name="messageId">メッセージID</param>
