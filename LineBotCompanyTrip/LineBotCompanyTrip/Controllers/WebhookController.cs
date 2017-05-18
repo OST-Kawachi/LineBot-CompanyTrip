@@ -1,7 +1,4 @@
-﻿using LineBotCompanyTrip.Configurations;
-using LineBotCompanyTrip.Services.Emotion;
-using LineBotCompanyTrip.Services.LineBot;
-using Newtonsoft.Json;
+﻿using LineBotCompanyTrip.Services.LineBot;
 using Newtonsoft.Json.Linq;
 using System.Diagnostics;
 using System.Net;
