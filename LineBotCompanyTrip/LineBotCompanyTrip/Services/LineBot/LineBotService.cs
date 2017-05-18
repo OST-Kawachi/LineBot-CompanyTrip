@@ -6,6 +6,10 @@ using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading.Tasks;
+using LineBotCompanyTrip.Models.AzureCognitiveServices.EmotionAPI;
+using System.Collections.Generic;
+using System.Diagnostics;
+using LineBotCompanyTrip.Common;
 
 namespace LineBotCompanyTrip.Services.LineBot {
 
@@ -108,10 +112,11 @@ namespace LineBotCompanyTrip.Services.LineBot {
 		public async Task CallImageMessageEvent( string replyToken , string messageId ) {
 
 			#region 画像のバイナリデータをEmotion APIより解析
-			string emotionResult = "";
+			List<ResponseOfEmotionAPI> emotionResult;
 			{
 				Stream binaryImage = await this.GetContent( messageId );
 				emotionResult = await new EmotionService().Call( binaryImage );
+				Trace.TraceInformation( "Emotion Result is : " + emotionResult );
 			}
 			#endregion
 			
@@ -122,7 +127,24 @@ namespace LineBotCompanyTrip.Services.LineBot {
 				requestObject.replyToken = replyToken;
 				RequestOfReplyMessage.Message message = new RequestOfReplyMessage.Message();
 				message.type = "text";
-				message.text = "画像が送られてきました\n" + emotionResult;
+
+				#region テキストの作成
+				message.text = "画像が送られてきました";
+				foreach( ResponseOfEmotionAPI resultOfEmotion in emotionResult ) {
+					string text = "\n"
+						+ "座標：( " + resultOfEmotion.faceRectangle.left + " , " + resultOfEmotion.faceRectangle.top + " )\n"
+						+ "幸せ度：" + CommonUtil.ConvertDecimalIntoPercentage( resultOfEmotion.scores.happiness ) + "\n"
+						+ "悲しみ度：" + CommonUtil.ConvertDecimalIntoPercentage( resultOfEmotion.scores.sadness ) + "\n"
+						+ "ビビり度：" + CommonUtil.ConvertDecimalIntoPercentage( resultOfEmotion.scores.fear ) + "\n"
+						+ "怒り度：" + CommonUtil.ConvertDecimalIntoPercentage( resultOfEmotion.scores.anger ) + "\n"
+						+ "軽蔑度：" + CommonUtil.ConvertDecimalIntoPercentage( resultOfEmotion.scores.contempt ) + "\n"
+						+ "うんざり度：" + CommonUtil.ConvertDecimalIntoPercentage( resultOfEmotion.scores.disgust ) + "\n"
+						+ "真顔度：" + CommonUtil.ConvertDecimalIntoPercentage( resultOfEmotion.scores.neutral ) + "\n"
+						+ "驚き度：" + CommonUtil.ConvertDecimalIntoPercentage( resultOfEmotion.scores.surprise ) + "\n";
+					message.text += text;
+				}
+				#endregion
+				
 				requestObject.messages = new RequestOfReplyMessage.Message[ 1 ];
 				requestObject.messages[ 0 ] = message;
 
@@ -139,7 +161,7 @@ namespace LineBotCompanyTrip.Services.LineBot {
 
 			}
 			#endregion
-
+			
 		}
 
 		/// <summary>
