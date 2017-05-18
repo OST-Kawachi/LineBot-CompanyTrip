@@ -1,8 +1,6 @@
-﻿
-using LineBotCompanyTrip.Configurations;
+﻿using LineBotCompanyTrip.Configurations;
 using LineBotCompanyTrip.Services.Emotion;
 using Newtonsoft.Json;
-using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -142,15 +140,14 @@ namespace LineBotCompanyTrip.Services.LineBot {
 		/// <returns></returns>
 		public async Task CallImageMessageEvent( string replyToken , string messageId ) {
 
-			#region 画像のバイナリデータを取得
-			Stream binaryImage = await this.GetContent( messageId );
-			Trace.TraceInformation( "Binary Image is : " + binaryImage );
+			#region 画像のバイナリデータをEmotion APIより解析
+			string emotionResult = "";
+			{
+				Stream binaryImage = await this.GetContent( messageId );
+				emotionResult = await new EmotionService().Call( binaryImage );
+			}
 			#endregion
 			
-			#region Emotion APIより画像を解析する
-			string emotionResult = await new EmotionService().Call( binaryImage );
-			#endregion
-
 			#region 解析結果を通知する
 			{
 

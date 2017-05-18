@@ -24,7 +24,7 @@ namespace LineBotCompanyTrip.Controllers {
 			Trace.TraceInformation( "Request Token is " + requestToken.ToString() );
 			
 			LineBotService lineBotService = new LineBotService();
-
+			
 			JToken firstEventToken = requestToken?[ "events" ]?[0];
 
 			#region イベントの入力チェック
