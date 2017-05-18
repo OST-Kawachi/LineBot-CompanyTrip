@@ -129,6 +129,7 @@ namespace LineBotCompanyTrip.Services.LineBot {
 			await replyMessageService
 				.AddTextMessage( "位置情報が送られてきました！" )
 				.AddTextMessage( text )
+				.AddImageMessage( "https://manuke.jp/wp-content/uploads/2016/05/chomado3.jpg" , "https://pbs.twimg.com/media/CvXQ3pyUIAEhWXz.jpg" )
 				.Send();
 
 		}

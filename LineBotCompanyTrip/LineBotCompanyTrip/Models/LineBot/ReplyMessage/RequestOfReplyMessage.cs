@@ -20,6 +20,16 @@
 			/// </summary>
 			public string text;
 
+			/// <summary>
+			/// 画像のURL
+			/// </summary>
+			public string originalContentUrl;
+
+			/// <summary>
+			/// プレビュー画像のURL
+			/// </summary>
+			public string previewImageUrl;
+
 		}
 
 		/// <summary>
