@@ -3,6 +3,7 @@ using LineBotCompanyTrip.Configurations;
 using LineBotCompanyTrip.Services.Emotion;
 using Newtonsoft.Json;
 using System.Diagnostics;
+using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading.Tasks;
@@ -141,18 +142,14 @@ namespace LineBotCompanyTrip.Services.LineBot {
 		/// <returns></returns>
 		public async Task CallImageMessageEvent( string replyToken , string messageId ) {
 
-			#region 画像のバイナリデータをサーバに保存する
-			string imagePath = "https://manuke.jp/wp-content/uploads/2016/05/chomado2.jpg";
+			#region 画像のバイナリデータをEmotion APIより解析
+			string emotionResult = "";
 			{
-				string binaryImage = await this.GetContent( messageId );
-				Trace.TraceInformation( "Binary Image is : " + binaryImage );
+				Stream binaryImage = await this.GetContent( messageId );
+				emotionResult = await new EmotionService().Call( binaryImage );
 			}
 			#endregion
-
-			#region Emotion APIより画像を解析する
-			string emotionResult = await new EmotionService().Call( imagePath );
-			#endregion
-
+			
 			#region 解析結果を通知する
 			{
 
@@ -185,17 +182,17 @@ namespace LineBotCompanyTrip.Services.LineBot {
 		/// </summary>
 		/// <param name="messageId">メッセージID</param>
 		/// <returns>バイナリデータ</returns>
-		private async Task<string> GetContent( string messageId ) {
+		private async Task<Stream> GetContent( string messageId ) {
 
 			HttpClient client = new HttpClient();
 			client.DefaultRequestHeaders.Accept.Add( new MediaTypeWithQualityHeaderValue( "application/json" ) );
 			client.DefaultRequestHeaders.Add( "Authorization" , "Bearer {" + LineBotConfig.ChannelAccessToken + "}" );
 
 			HttpResponseMessage response = await client.GetAsync( LineBotConfig.GetContentUrl( messageId ) ).ConfigureAwait( false );
-			string result = await response.Content.ReadAsStringAsync().ConfigureAwait( false );
-		
+			Stream result = await response.Content.ReadAsStreamAsync().ConfigureAwait( false );
+
 			return result;
-			
+
 		}
 
 	}
