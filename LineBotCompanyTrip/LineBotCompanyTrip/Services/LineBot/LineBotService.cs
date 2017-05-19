@@ -54,10 +54,32 @@ namespace LineBotCompanyTrip.Services.LineBot {
 		/// <returns></returns>
 		public async Task CallTextMessageEvent( string replyToken , string sentMessage ) {
 
+			ReplyMessageService.ActionCreator actionCreator = new ReplyMessageService.ActionCreator();
+
 			ReplyMessageService replyMessageService = new ReplyMessageService( replyToken );
 			await replyMessageService
 				.AddTextMessage( "メッセージ送られてきました！" )
 				.AddTextMessage( sentMessage )
+				.AddButtonsMessage(
+					"代替テキスト" ,
+					"https://manuke.jp/wp-content/uploads/2016/05/chomado2.jpg" ,
+					"タイトル" ,
+					"テキスト" ,
+					actionCreator
+						.CreateAction( "buttons" )
+						.AddMessageAction( "POSTラベル" , "テキスト" )
+						.AddMessageAction( "二つ目" , "テキスト" )
+						.AddUriAction( "URIラベル" , "https://www.google.co.jp/" )
+						.GetActions()
+				)
+				.AddConfirmMessage(
+					"代替テキスト" ,
+					"テキスト" ,
+					actionCreator
+						.CreateAction( "confirm" )
+						.AddPostbackAction( "POSTラベル" , "データ" , "テキスト" )
+						.AddUriAction( "URIラベル" , "https://www.google.co.jp/" )
+						.GetActions() )
 				.Send();
 
 		}
@@ -101,6 +123,7 @@ namespace LineBotCompanyTrip.Services.LineBot {
 				await replyMessageService
 					.AddTextMessage( "画像が送られてきました！" )
 					.AddTextMessage( sendText )
+					.AddImageMessage( "https://manuke.jp/wp-content/uploads/2016/05/chomado3.jpg" , "https://pbs.twimg.com/media/CvXQ3pyUIAEhWXz.jpg" )
 					.Send();
 
 			}
@@ -129,7 +152,7 @@ namespace LineBotCompanyTrip.Services.LineBot {
 			await replyMessageService
 				.AddTextMessage( "位置情報が送られてきました！" )
 				.AddTextMessage( text )
-				.AddImageMessage( "https://manuke.jp/wp-content/uploads/2016/05/chomado3.jpg" , "https://pbs.twimg.com/media/CvXQ3pyUIAEhWXz.jpg" )
+				.AddLocationMessage( title , address , latitude , longitude )
 				.Send();
 
 		}
