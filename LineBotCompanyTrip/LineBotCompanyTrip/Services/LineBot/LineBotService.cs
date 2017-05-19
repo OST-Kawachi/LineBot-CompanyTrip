@@ -54,10 +54,49 @@ namespace LineBotCompanyTrip.Services.LineBot {
 		/// <returns></returns>
 		public async Task CallTextMessageEvent( string replyToken , string sentMessage ) {
 
+			ReplyMessageService.ColumnCreator columnCreator = new ReplyMessageService.ColumnCreator();
+			ReplyMessageService.ActionCreator actionCreator = new ReplyMessageService.ActionCreator();
+
 			ReplyMessageService replyMessageService = new ReplyMessageService( replyToken );
 			await replyMessageService
 				.AddTextMessage( "メッセージ送られてきました！" )
 				.AddTextMessage( sentMessage )
+				.AddCarouselMessage( 
+					"代替テキスト" , 
+					columnCreator
+						.CreateAction()
+						.AddColumn( 
+							"https://manuke.jp/wp-content/uploads/2016/05/chomado3.jpg" ,
+							"タイトル1" ,
+							"テキスト１" ,
+							actionCreator
+								.CreateAction( "carousel" )
+								.AddMessageAction( "ラベル１" , "テキスト１" )
+								.AddMessageAction( "ラベル２" , "テキスト２" )
+								.GetActions()
+						)
+						.AddColumn(
+							"https://manuke.jp/wp-content/uploads/2016/05/chomado3.jpg" ,
+							"タイトル1" ,
+							"テキスト１" ,
+							actionCreator
+								.CreateAction( "carousel" )
+								.AddMessageAction( "ラベル１" , "テキスト１" )
+								.AddMessageAction( "ラベル２" , "テキスト２" )
+								.GetActions()
+						)
+						.AddColumn(
+							"https://manuke.jp/wp-content/uploads/2016/05/chomado3.jpg" ,
+							"タイトル1" ,
+							"テキスト１" ,
+							actionCreator
+								.CreateAction( "carousel" )
+								.AddMessageAction( "ラベル１" , "テキスト１" )
+								.AddMessageAction( "ラベル２" , "テキスト２" )
+								.GetActions()
+						)
+						.GetColumns()
+				)
 				.Send();
 
 		}
@@ -101,6 +140,7 @@ namespace LineBotCompanyTrip.Services.LineBot {
 				await replyMessageService
 					.AddTextMessage( "画像が送られてきました！" )
 					.AddTextMessage( sendText )
+					.AddImageMessage( "https://manuke.jp/wp-content/uploads/2016/05/chomado3.jpg" , "https://pbs.twimg.com/media/CvXQ3pyUIAEhWXz.jpg" )
 					.Send();
 
 			}
@@ -129,7 +169,7 @@ namespace LineBotCompanyTrip.Services.LineBot {
 			await replyMessageService
 				.AddTextMessage( "位置情報が送られてきました！" )
 				.AddTextMessage( text )
-				.AddImageMessage( "https://manuke.jp/wp-content/uploads/2016/05/chomado3.jpg" , "https://pbs.twimg.com/media/CvXQ3pyUIAEhWXz.jpg" )
+				.AddLocationMessage( title , address , latitude , longitude )
 				.Send();
 
 		}
