@@ -170,7 +170,88 @@ namespace LineBotCompanyTrip.Services.LineBot {
 				return this.actions;
 
 			}
+
+		}
+		
+		/// <summary>
+		/// カルーセル型テンプレートに使用するカラム作成クラス
+		/// </summary>
+		public class ColumnCreator {
+
+			/// <summary>
+			/// カラム配列
+			/// </summary>
+			private RequestOfReplyMessage.Message.Template.Column[] columns ;
+
+			/// <summary>
+			/// カラム配列の長さ
+			/// </summary>
+			private int ColumnIndex { set; get; }
+
+			/// <summary>
+			/// カラム配列の最大値
+			/// </summary>
+			private int MaxIndex { set; get; }
+
+			/// <summary>
+			/// カラム配列を作成する
+			/// </summary>
+			/// <returns>自身のオブジェクト</returns>
+			public ColumnCreator CreateAction() {
+
+				this.columns = new RequestOfReplyMessage.Message.Template.Column[ 1 ];
+				this.MaxIndex = 5;
+				this.ColumnIndex = 0;
+
+				return this;
+
+			}
 			
+			/// <summary>
+			/// カラムを追加する
+			/// 2つめ以降のカラムは配列を作成しながら追加する
+			/// </summary>
+			/// <param name="thumbnailImageUrl">画像のURL</param>
+			/// <param name="title">タイトル</param>
+			/// <param name="text">説明文</param>
+			/// <param name="actions">ボタン</param>
+			/// <returns></returns>
+			public ColumnCreator AddColumn(
+				string thumbnailImageUrl ,
+				string title ,
+				string text ,
+				RequestOfReplyMessage.Message.Template.Action[] actions
+			) {
+
+				if( this.ColumnIndex == this.MaxIndex ) {
+					return this;
+				}
+				else if( this.ColumnIndex != 0 ) {
+					Array.Resize<RequestOfReplyMessage.Message.Template.Column>( ref this.columns , this.ColumnIndex + 1 );
+				}
+
+				RequestOfReplyMessage.Message.Template.Column column = new RequestOfReplyMessage.Message.Template.Column();
+				column.thumbnailImageUrl = thumbnailImageUrl;
+				column.title = title;
+				column.text = text;
+				column.actions = actions;
+
+				this.columns[ this.ColumnIndex ] = column;
+				this.ColumnIndex++;
+
+				return this;
+				
+			}
+
+			/// <summary>
+			/// カラムの配列を返す
+			/// </summary>
+			/// <returns>カラムの配列を返す</returns>
+			public RequestOfReplyMessage.Message.Template.Column[] GetColumns() {
+				return this.columns;
+			}
+
+
 
 		}
 		

@@ -54,32 +54,49 @@ namespace LineBotCompanyTrip.Services.LineBot {
 		/// <returns></returns>
 		public async Task CallTextMessageEvent( string replyToken , string sentMessage ) {
 
+			ReplyMessageService.ColumnCreator columnCreator = new ReplyMessageService.ColumnCreator();
 			ReplyMessageService.ActionCreator actionCreator = new ReplyMessageService.ActionCreator();
 
 			ReplyMessageService replyMessageService = new ReplyMessageService( replyToken );
 			await replyMessageService
 				.AddTextMessage( "メッセージ送られてきました！" )
 				.AddTextMessage( sentMessage )
-				.AddButtonsMessage(
-					"代替テキスト" ,
-					"https://manuke.jp/wp-content/uploads/2016/05/chomado2.jpg" ,
-					"タイトル" ,
-					"テキスト" ,
-					actionCreator
-						.CreateAction( "buttons" )
-						.AddMessageAction( "POSTラベル" , "テキスト" )
-						.AddMessageAction( "二つ目" , "テキスト" )
-						.AddUriAction( "URIラベル" , "https://www.google.co.jp/" )
-						.GetActions()
+				.AddCarouselMessage( 
+					"代替テキスト" , 
+					columnCreator
+						.CreateAction()
+						.AddColumn( 
+							"https://manuke.jp/wp-content/uploads/2016/05/chomado3.jpg" ,
+							"タイトル1" ,
+							"テキスト１" ,
+							actionCreator
+								.CreateAction( "carousel" )
+								.AddMessageAction( "ラベル１" , "テキスト１" )
+								.AddMessageAction( "ラベル２" , "テキスト２" )
+								.GetActions()
+						)
+						.AddColumn(
+							"https://manuke.jp/wp-content/uploads/2016/05/chomado3.jpg" ,
+							"タイトル1" ,
+							"テキスト１" ,
+							actionCreator
+								.CreateAction( "carousel" )
+								.AddMessageAction( "ラベル１" , "テキスト１" )
+								.AddMessageAction( "ラベル２" , "テキスト２" )
+								.GetActions()
+						)
+						.AddColumn(
+							"https://manuke.jp/wp-content/uploads/2016/05/chomado3.jpg" ,
+							"タイトル1" ,
+							"テキスト１" ,
+							actionCreator
+								.CreateAction( "carousel" )
+								.AddMessageAction( "ラベル１" , "テキスト１" )
+								.AddMessageAction( "ラベル２" , "テキスト２" )
+								.GetActions()
+						)
+						.GetColumns()
 				)
-				.AddConfirmMessage(
-					"代替テキスト" ,
-					"テキスト" ,
-					actionCreator
-						.CreateAction( "confirm" )
-						.AddPostbackAction( "POSTラベル" , "データ" , "テキスト" )
-						.AddUriAction( "URIラベル" , "https://www.google.co.jp/" )
-						.GetActions() )
 				.Send();
 
 		}
