@@ -1,5 +1,6 @@
 ﻿using LineBotCompanyTrip.Configurations;
-using LineBotCompanyTrip.Services.Emotion;
+using System;
+using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -23,13 +24,27 @@ namespace LineBotCompanyTrip.Services.LineBot {
 			client.DefaultRequestHeaders.Accept.Add( new MediaTypeWithQualityHeaderValue( "application/json" ) );
 			client.DefaultRequestHeaders.Add( "Authorization" , "Bearer {" + LineBotConfig.ChannelAccessToken + "}" );
 
-			HttpResponseMessage response = await client.GetAsync( LineBotConfig.GetContentUrl( messageId ) ).ConfigureAwait( false );
-			Stream result = await response.Content.ReadAsStreamAsync().ConfigureAwait( false );
-		
-			return result;
-			
+			try {
+				HttpResponseMessage response = await client.GetAsync( LineBotConfig.GetContentUrl( messageId ) );
+				Stream result = await response.Content.ReadAsStreamAsync();
+				Trace.TraceInformation( "Get Binary Image is : " + result != null ? "SUCCESS" : "FAILED" );
+				return result;
+			}
+			catch( ArgumentNullException e ) {
+				Trace.TraceInformation( "Emotion API Argument Null Exception " + e.Message );
+				return null;
+			}
+			catch( HttpRequestException e ) {
+				Trace.TraceInformation( "Emotion API Http Request Exception " + e.Message );
+				return null;
+			}
+			catch( Exception e ) {
+				Trace.TraceInformation( "予期せぬ例外 " + e.Message );
+				return null;
+			}
+
 		}
-		
+
 	}
 
 }

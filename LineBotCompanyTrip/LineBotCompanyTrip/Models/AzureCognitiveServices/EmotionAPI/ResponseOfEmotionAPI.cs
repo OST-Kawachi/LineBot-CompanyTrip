@@ -15,22 +15,22 @@
 			/// <summary>
 			/// 画像上からの位置
 			/// </summary>
-			public int top { set; get; }
-			
+			public int top;
+
 			/// <summary>
 			/// 画像左からの位置
 			/// </summary>
-			public int left { set; get; }
+			public int left;
 
 			/// <summary>
 			/// 顔の高さ
 			/// </summary>
-			public int height { set; get; }
+			public int height;
 
 			/// <summary>
 			/// 顔の幅
 			/// </summary>
-			public int width { set; get; }
+			public int width;
 
 		}
 
@@ -42,54 +42,54 @@
 			/// <summary>
 			/// 怒り
 			/// </summary>
-			public double anger { set; get; }
+			public double anger;
 
 			/// <summary>
 			/// 軽蔑
 			/// </summary>
-			public double contempt { set; get; }
+			public double contempt;
 
 			/// <summary>
 			/// うんざり
 			/// </summary>
-			public double disgust { set; get; }
-			
+			public double disgust;
+
 			/// <summary>
 			/// 恐れ
 			/// </summary>
-			public double fear { set; get; }
+			public double fear;
 
 			/// <summary>
 			/// 幸せ
 			/// </summary>
-			public double happiness { set; get; }
+			public double happiness;
 
 			/// <summary>
 			/// 無表情
 			/// </summary>
-			public double neutral { set; get; }
+			public double neutral;
 
 			/// <summary>
 			/// 悲しみ
 			/// </summary>
-			public double sadness { set; get; }
+			public double sadness;
 
 			/// <summary>
 			/// 驚き
 			/// </summary>
-			public double surprise { set; get; }
-			
+			public double surprise;
+
 		}
 
 		/// <summary>
 		/// 顔座標のデータ
 		/// </summary>
-		public FaceRectangle faceRectangle { set; get; }
+		public FaceRectangle faceRectangle;
 
 		/// <summary>
 		/// 表情情報
 		/// </summary>
-		public Scores scores { set; get; }
+		public Scores scores;
 
 	}
 
