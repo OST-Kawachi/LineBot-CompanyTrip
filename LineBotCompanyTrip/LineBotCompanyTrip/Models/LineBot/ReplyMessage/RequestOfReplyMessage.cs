@@ -73,7 +73,7 @@
 					public Action[] actions;
 
 				}
-
+				
 				/// <summary>
 				/// テンプレート種別
 				/// </summary>
@@ -103,7 +103,7 @@
 				/// カラム
 				/// </summary>
 				public Column[] columns;
-
+				
 			}
 
 			/// <summary>
@@ -157,12 +157,12 @@
 			public Template template;
 
 		}
-
+		
 		/// <summary>
 		/// 返信に必要なリプライトークン
 		/// </summary>
 		public string replyToken;
-
+		
 		/// <summary>
 		/// リプライメッセージ(最大5通)
 		/// </summary>

@@ -11,6 +11,28 @@ namespace LineBotCompanyTrip.Models.Webhook {
 		/// イベント情報
 		/// </summary>
 		public class Event {
+
+			/// <summary>
+			/// イベント送信元を表すオブジェクト
+			/// </summary>
+			public class Source {
+
+				/// <summary>
+				/// 種別
+				/// </summary>
+				public string type { set; get; }
+
+				/// <summary>
+				/// ユーザID
+				/// </summary>
+				public string userId { set; get; }
+
+				/// <summary>
+				/// グループID
+				/// </summary>
+				public string groupId { set; get; }
+
+			}
 		
 			/// <summary>
 			/// メッセージ情報
@@ -55,6 +77,18 @@ namespace LineBotCompanyTrip.Models.Webhook {
 			}
 
 			/// <summary>
+			/// ポストバック
+			/// </summary>
+			public class Postback {
+
+				/// <summary>
+				/// ポストバックデータ
+				/// </summary>
+				public string data { set; get; }
+
+			}
+
+			/// <summary>
 			/// イベント種別
 			/// </summary>
 			public string type { set; get; }
@@ -63,6 +97,16 @@ namespace LineBotCompanyTrip.Models.Webhook {
 			/// リプライトークン
 			/// </summary>
 			public string replyToken { set; get; }
+			
+			/// <summary>
+			/// ポストバック
+			/// </summary>
+			public Postback postback { set; get; }
+			
+			/// <summary>
+			/// イベント送信元を表すオブジェクト
+			/// </summary>
+			public Source source { set; get; }
 
 			/// <summary>
 			/// メッセージオブジェクト
