@@ -21,9 +21,9 @@ namespace LineBotCompanyTrip.Services.Emotion {
 		/// </summary>
 		/// <param name="binaryImage">画像のバイナリデータ</param>
 		/// <returns>APIレスポンス</returns>
-		public async Task<List<ResponseOfEmotionAPI>> Call( Stream binaryImage ) {
+		public async Task<List<ResponseOfEmotionAPI>> Call( byte[] binaryImage ) {
 			
-			StreamContent content = new StreamContent( binaryImage );
+			StreamContent content = new StreamContent( new MemoryStream( binaryImage ) );
 			content.Headers.ContentType = new MediaTypeHeaderValue( "application/octet-stream" );
 			
 			HttpClient client = new HttpClient();

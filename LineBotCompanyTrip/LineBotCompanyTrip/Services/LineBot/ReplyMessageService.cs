@@ -1,4 +1,5 @@
-﻿using LineBotCompanyTrip.Configurations;
+﻿using LineBotCompanyTrip.Common;
+using LineBotCompanyTrip.Configurations;
 using LineBotCompanyTrip.Models.LineBot.ReplyMessage;
 using Newtonsoft.Json;
 using System;
@@ -58,13 +59,13 @@ namespace LineBotCompanyTrip.Services.LineBot {
 
 				this.actions = new RequestOfReplyMessage.Message.Template.Action[ 1 ];
 
-				if( "buttons".Equals( templateType ) ) {
+				if( CommonEnum.TemplateType.buttons.ToString().Equals( templateType ) ) {
 					this.MaxIndex = 4;
 				}
-				else if( "confirm".Equals( templateType ) ) {
+				else if( CommonEnum.TemplateType.confirm.ToString().Equals( templateType ) ) {
 					this.MaxIndex = 2;
 				}
-				else if( "carousel".Equals( templateType ) ) {
+				else if( CommonEnum.TemplateType.carousel.ToString().Equals( templateType ) ) {
 					this.MaxIndex = 3;
 				}
 
@@ -93,7 +94,7 @@ namespace LineBotCompanyTrip.Services.LineBot {
 				}
 
 				RequestOfReplyMessage.Message.Template.Action action = new RequestOfReplyMessage.Message.Template.Action();
-				action.type = "postback";
+				action.type = CommonEnum.ActionType.postback.ToString();
 				action.label = label;
 				action.data = data;
 				action.text = text;
@@ -122,7 +123,7 @@ namespace LineBotCompanyTrip.Services.LineBot {
 				}
 
 				RequestOfReplyMessage.Message.Template.Action action = new RequestOfReplyMessage.Message.Template.Action();
-				action.type = "message";
+				action.type = CommonEnum.ActionType.message.ToString();
 				action.label = label;
 				action.text = text;
 
@@ -150,7 +151,7 @@ namespace LineBotCompanyTrip.Services.LineBot {
 				}
 
 				RequestOfReplyMessage.Message.Template.Action action = new RequestOfReplyMessage.Message.Template.Action();
-				action.type = "uri";
+				action.type = CommonEnum.ActionType.uri.ToString();
 				action.label = label;
 				action.uri = uri;
 
@@ -287,7 +288,7 @@ namespace LineBotCompanyTrip.Services.LineBot {
 			}
 
 			RequestOfReplyMessage.Message message = new RequestOfReplyMessage.Message();
-			message.type = "text";
+			message.type = CommonEnum.MessageType.text.ToString();
 			message.text = messageText;
 
 			this.Request.messages[ this.MessagesIndex ] = message;
@@ -316,7 +317,7 @@ namespace LineBotCompanyTrip.Services.LineBot {
 			}
 
 			RequestOfReplyMessage.Message message = new RequestOfReplyMessage.Message();
-			message.type = "image";
+			message.type = CommonEnum.MessageType.image.ToString();
 			message.originalContentUrl = originalContentUrl;
 			message.previewImageUrl = previewImageUrl;
 
@@ -353,7 +354,7 @@ namespace LineBotCompanyTrip.Services.LineBot {
 			}
 
 			RequestOfReplyMessage.Message message = new RequestOfReplyMessage.Message();
-			message.type = "location";
+			message.type = CommonEnum.MessageType.location.ToString();
 			message.title = title;
 			message.address = address;
 			message.latitude = latitude;
@@ -395,14 +396,14 @@ namespace LineBotCompanyTrip.Services.LineBot {
 			}
 
 			RequestOfReplyMessage.Message.Template template = new RequestOfReplyMessage.Message.Template();
-			template.type = "buttons";
+			template.type = CommonEnum.TemplateType.buttons.ToString();
 			template.thumbnailImageUrl = thumbnailImageUrl;
 			template.title = title;
 			template.text = text;
 			template.actions = actions;
 
 			RequestOfReplyMessage.Message message = new RequestOfReplyMessage.Message();
-			message.type = "template";
+			message.type = CommonEnum.MessageType.template.ToString();
 			message.altText = altText;
 			message.template = template;
 
@@ -438,12 +439,12 @@ namespace LineBotCompanyTrip.Services.LineBot {
 			}
 			
 			RequestOfReplyMessage.Message.Template template = new RequestOfReplyMessage.Message.Template();
-			template.type = "confirm";
+			template.type = CommonEnum.TemplateType.confirm.ToString();
 			template.text = text;
 			template.actions = actions;
 
 			RequestOfReplyMessage.Message message = new RequestOfReplyMessage.Message();
-			message.type = "template";
+			message.type = CommonEnum.MessageType.template.ToString();
 			message.altText = altText;
 			message.template = template;
 			
@@ -477,11 +478,11 @@ namespace LineBotCompanyTrip.Services.LineBot {
 			}
 
 			RequestOfReplyMessage.Message.Template template = new RequestOfReplyMessage.Message.Template();
-			template.type = "carousel";
+			template.type = CommonEnum.TemplateType.carousel.ToString();
 			template.columns = columns;
 
 			RequestOfReplyMessage.Message message = new RequestOfReplyMessage.Message();
-			message.type = "template";
+			message.type = CommonEnum.MessageType.template.ToString();
 			message.altText = altText;
 			message.template = template;
 			
