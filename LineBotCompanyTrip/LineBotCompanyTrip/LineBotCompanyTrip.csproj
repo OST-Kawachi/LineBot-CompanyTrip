@@ -119,7 +119,6 @@
     <Compile Include="Configurations\EmotionConfig.cs" />
     <Compile Include="Configurations\FaceConfig.cs" />
     <Compile Include="Configurations\LineBotConfig.cs" />
-    <Compile Include="Controllers\PictureController.cs" />
     <Compile Include="Controllers\WebhookController.cs" />
     <Compile Include="Global.asax.cs">
       <DependentUpon>Global.asax</DependentUpon>

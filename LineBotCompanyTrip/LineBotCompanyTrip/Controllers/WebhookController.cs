@@ -6,9 +6,9 @@ using LineBotCompanyTrip.Services.Emotion;
 using LineBotCompanyTrip.Services.Face;
 using LineBotCompanyTrip.Services.LineBot;
 using Newtonsoft.Json.Linq;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Text.RegularExpressions;
@@ -256,17 +256,7 @@ namespace LineBotCompanyTrip.Controllers {
 				}
 				else {
 					foreach( ResponseOfEmotionAPI resultOfEmotion in responseOfEmotionAPI ) {
-					string text = "\n"
-						+ "座標：( " + resultOfEmotion.faceRectangle.left + " , " + resultOfEmotion.faceRectangle.top + " )\n"
-						+ "幸せ度：" + CommonUtil.ConvertDecimalIntoPercentage( resultOfEmotion.scores.happiness ) + "\n"
-						+ "悲しみ度：" + CommonUtil.ConvertDecimalIntoPercentage( resultOfEmotion.scores.sadness ) + "\n"
-						+ "ビビり度：" + CommonUtil.ConvertDecimalIntoPercentage( resultOfEmotion.scores.fear ) + "\n"
-						+ "怒り度：" + CommonUtil.ConvertDecimalIntoPercentage( resultOfEmotion.scores.anger ) + "\n"
-						+ "軽蔑度：" + CommonUtil.ConvertDecimalIntoPercentage( resultOfEmotion.scores.contempt ) + "\n"
-						+ "うんざり度：" + CommonUtil.ConvertDecimalIntoPercentage( resultOfEmotion.scores.disgust ) + "\n"
-						+ "真顔度：" + CommonUtil.ConvertDecimalIntoPercentage( resultOfEmotion.scores.neutral ) + "\n"
-						+ "驚き度：" + CommonUtil.ConvertDecimalIntoPercentage( resultOfEmotion.scores.surprise ) + "\n";
-					sendText += text;
+						sendText += this.GetAnalysis( resultOfEmotion ) + "\n\n";
 					}
 				}
 
@@ -281,6 +271,62 @@ namespace LineBotCompanyTrip.Controllers {
 
 			return new HttpResponseMessage( HttpStatusCode.OK );
 
+		}
+
+		/// <summary>
+		/// 解析結果を返す
+		/// </summary>
+		/// <param name="resultOfEmotion">Emotion APIの結果</param>
+		/// <returns>解析結果</returns>
+		private string GetAnalysis( ResponseOfEmotionAPI resultOfEmotion ) {
+			
+			//幸せ度40%以上で幸せ認定
+			double happiness = Math.Truncate( resultOfEmotion.scores.happiness * 10000 ) / 10000;
+			if( happiness > 0.4 )
+				return "喜び度:" + CommonUtil.ConvertDecimalIntoPercentage( happiness ) + "！！！\n"
+					+ "(*´∇｀*)ﾆﾊﾟｰｯ";
+
+			//悲しみ度40%以上で幸せ認定
+			double sadness = Math.Truncate( resultOfEmotion.scores.sadness * 10000 ) / 10000;
+			if( sadness > 0.4 )
+				return "悲しみ度:" + CommonUtil.ConvertDecimalIntoPercentage( sadness ) + "！！！\n"
+					+ "｡ﾟ(ﾟ´Д｀ﾟ)゜｡ｳｧｧｧﾝ";
+
+			//ビビり度40%以上で幸せ認定
+			double fear = Math.Truncate( resultOfEmotion.scores.fear * 10000 ) / 10000;
+			if( fear > 0.4 )
+			return "ビビり度:" + CommonUtil.ConvertDecimalIntoPercentage( fear ) + "！！！\n"
+					+ "((( ；ﾟДﾟ)))ｶﾞｸｶﾞｸﾌﾞﾙﾌﾞﾙ";
+
+			//怒り度40%以上で幸せ認定
+			double anger = Math.Truncate( resultOfEmotion.scores.anger * 10000 ) / 10000;
+			if( anger > 0.4 )
+				return "怒り度:" + CommonUtil.ConvertDecimalIntoPercentage( anger ) + "！！！\n"
+					+ "ﾝﾓｫｰ!! o(*≧д≦)o″))";
+
+			//軽蔑度40%以上で幸せ認定
+			double contempt = Math.Truncate( resultOfEmotion.scores.contempt * 10000 ) / 10000;
+			if( contempt > 0.4 )
+				return "軽蔑度:" + CommonUtil.ConvertDecimalIntoPercentage( contempt ) + "！！！\n"
+					+ "(￢_￢;)ﾄﾞﾝﾋﾞｷ";
+
+			//うんざり度40%以上で幸せ認定
+			double disgust = Math.Truncate( resultOfEmotion.scores.disgust * 10000 ) / 10000;
+			if( disgust > 0.4 )
+				return "うんざり度:" + CommonUtil.ConvertDecimalIntoPercentage( disgust ) + "！！！\n"
+					+ "┐(´～｀)┌ ﾔﾚﾔﾚ";
+
+			//驚き度40%以上で幸せ認定
+			double surprise = Math.Truncate( resultOfEmotion.scores.surprise * 10000 ) / 10000;
+			if( surprise > 0.4 )
+				return "驚き度:" + CommonUtil.ConvertDecimalIntoPercentage( surprise ) + "！！！\n"
+					+ "工エエェ(ﾟ〇ﾟ ;)ェエエ工";
+
+			//どれも40%超えてなかった場合は真顔認定
+			double neutral = Math.Truncate( resultOfEmotion.scores.neutral * 10000 ) / 10000;
+			return "真顔度:" + CommonUtil.ConvertDecimalIntoPercentage( neutral ) + "！！！\n"
+				+ "(´・_・｀)";
+			
 		}
 
 		/// <summary>
@@ -314,7 +360,7 @@ namespace LineBotCompanyTrip.Controllers {
 					actionCreator
 					.CreateAction( "buttons" )
 					.AddPostbackAction(
-						"たくさん写真撮られた人" ,
+						"たくさん写真撮られた人ランキング" ,
 						CommonEnum.PostbackEvent.count.ToString() ,
 						"誰がたくさん撮られたの？"
 					)
