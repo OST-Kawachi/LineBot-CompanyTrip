@@ -18,7 +18,7 @@ namespace LineBotCompanyTrip.Services.LineBot {
 		/// </summary>
 		/// <param name="messageId">メッセージID</param>
 		/// <returns>バイナリデータ</returns>
-		public async Task<Stream> GetContent( string messageId ) {
+		public async Task<byte[]> GetContent( string messageId ) {
 
 			HttpClient client = new HttpClient();
 			client.DefaultRequestHeaders.Accept.Add( new MediaTypeWithQualityHeaderValue( "application/json" ) );
@@ -26,7 +26,7 @@ namespace LineBotCompanyTrip.Services.LineBot {
 
 			try {
 				HttpResponseMessage response = await client.GetAsync( LineBotConfig.GetContentUrl( messageId ) );
-				Stream result = await response.Content.ReadAsStreamAsync();
+				byte[] result = await response.Content.ReadAsByteArrayAsync();
 				Trace.TraceInformation( "Get Binary Image is : " + result != null ? "SUCCESS" : "FAILED" );
 				return result;
 			}

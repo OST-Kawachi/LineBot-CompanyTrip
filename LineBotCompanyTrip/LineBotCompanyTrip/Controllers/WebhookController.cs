@@ -6,7 +6,6 @@ using LineBotCompanyTrip.Services.Emotion;
 using LineBotCompanyTrip.Services.Face;
 using LineBotCompanyTrip.Services.LineBot;
 using Newtonsoft.Json.Linq;
-using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -45,23 +44,23 @@ namespace LineBotCompanyTrip.Controllers {
 			}
 			
 			//フォロー時イベント
-			if( "follow".Equals( firstEvent.type ) )
+			if( CommonEnum.EventType.follow.ToString().Equals( firstEvent.type ) )
 				return await this.FollowEvent( firstEvent.replyToken , firstEvent.source.userId );
 
 			//グループ追加時イベント
-			else if( "join".Equals( firstEvent.type ) )
+			else if( CommonEnum.EventType.join.ToString().Equals( firstEvent.type ) )
 				return await this.JoinEvent( firstEvent.replyToken , firstEvent.source.groupId );
 
 			//アンフォロー時イベント
-			else if( "unfollow".Equals( firstEvent.type ) )
+			else if( CommonEnum.EventType.unfollow.ToString().Equals( firstEvent.type ) )
 				return this.UnfollowEvent( firstEvent.source.userId );
 
 			//グループ退出時イベント
-			else if( "leave".Equals( firstEvent.type ) )
+			else if( CommonEnum.EventType.leave.ToString().Equals( firstEvent.type ) )
 				return this.LeaveEvent( firstEvent.source.groupId );
 
 			//メッセージ時イベント
-			else if( "message".Equals( firstEvent.type ) ) {
+			else if( CommonEnum.EventType.message.ToString().Equals( firstEvent.type ) ) {
 
 				//メッセージオブジェクトの取得
 				RequestOfWebhook.Event.MessageObject message;
@@ -74,7 +73,7 @@ namespace LineBotCompanyTrip.Controllers {
 				}
 
 				//「集計して」のテキストメッセージ送信時イベント
-				if( "text".Equals( message.type ) && Regex.IsMatch( message.text , @"(.)*集計して(.)*" ) )
+				if( CommonEnum.MessageType.text.ToString().Equals( message.type ) && Regex.IsMatch( message.text , @"(.)*集計して(.)*" ) )
 					return await this.RankingMessageEvent( 
 						firstEvent.replyToken , 
 						firstEvent.source.userId ,
@@ -82,7 +81,7 @@ namespace LineBotCompanyTrip.Controllers {
 					);
 				
 				//画像メッセージ送信時イベント
-				else if( "image".Equals( message.type ) )
+				else if( CommonEnum.MessageType.image.ToString().Equals( message.type ) )
 					return await this.ImageMessageEvent( 
 						firstEvent.replyToken , 
 						firstEvent.source.userId ,
@@ -93,27 +92,27 @@ namespace LineBotCompanyTrip.Controllers {
 			}
 
 			//Postback時イベント
-			else if( "postback".Equals( firstEvent.type ) ) {
+			else if( CommonEnum.EventType.postback.ToString().Equals( firstEvent.type ) ) {
 
 				//たくさん写真撮られた人ランキング
-				if( "a".Equals( firstEvent.postback.data ) )
-					return this.CountRankingEvent( 
+				if( CommonEnum.PostbackEvent.count.ToString().Equals( firstEvent.postback.data ) )
+					return await this.CountRankingEvent( 
 						firstEvent.replyToken ,
 						firstEvent.source.userId , 
 						firstEvent.source.groupId
 					);
 
 				//笑顔ランキング
-				else if( "b".Equals( firstEvent.postback.data ) )
-					return this.HappinessRankingEvent(
+				else if( CommonEnum.PostbackEvent.happiness.ToString().Equals( firstEvent.postback.data ) )
+					return await this.HappinessRankingEvent(
 						firstEvent.replyToken ,
 						firstEvent.source.userId ,
 						firstEvent.source.groupId
 					);
 
 				//表情豊かランキング
-				else if( "c".Equals( firstEvent.postback.data ) )
-					return this.EmotionRankingEvent(
+				else if( CommonEnum.PostbackEvent.emotion.ToString().Equals( firstEvent.postback.data ) )
+					return await this.EmotionRankingEvent(
 						firstEvent.replyToken ,
 						firstEvent.source.userId ,
 						firstEvent.source.groupId
@@ -221,26 +220,24 @@ namespace LineBotCompanyTrip.Controllers {
 			Trace.TraceInformation( "メッセージイベント通知－画像" );
 
 			//Contentより画像のバイナリデータ取得
-			Stream faceImageStream = null;
-			Stream emotionImageStream = null;
+			byte[] imageBytes = null;
 			{
 				LineBotService lineBotService = new LineBotService();
-				faceImageStream = await lineBotService.GetContent( messageId );
-				emotionImageStream = await lineBotService.GetContent( messageId );
+				imageBytes = await lineBotService.GetContent( messageId );
 			}
 			
 			//Face APIよりFaceIDの取得
 			List<ResponseOfFaceAPI> responseOfFaceAPI = null;
 			{
 				FaceService faceService = new FaceService();
-				responseOfFaceAPI = await faceService.Call( faceImageStream );
+				responseOfFaceAPI = await faceService.Call( imageBytes );
 			}
-			
+						
 			//Emotion APIより解析結果取得
 			List<ResponseOfEmotionAPI> responseOfEmotionAPI = null;
 			{
 				EmotionService emotionService = new EmotionService();
-				responseOfEmotionAPI = await emotionService.Call( emotionImageStream );
+				responseOfEmotionAPI = await emotionService.Call( imageBytes );
 			}
 			
 			// TODO Face APIの顔群とEmotionAPIの解析群の紐づけ
@@ -248,7 +245,8 @@ namespace LineBotCompanyTrip.Controllers {
 			// TODO DBに画像情報を登録
 
 			// TODO 画像をサーバに保存
-			
+			string url = "https://manuke.jp/wp-content/uploads/2016/05/chomado2.jpg";
+
 			//解析結果の通知
 			{
 
@@ -276,7 +274,7 @@ namespace LineBotCompanyTrip.Controllers {
 				await replyMessageService
 				.AddTextMessage( "画像が送られてきました！" )
 				.AddTextMessage( sendText )
-				//.AddImageMessage( imageUrl , imageUrl )
+				.AddImageMessage( url , url )
 				.Send();
 
 			}
@@ -317,17 +315,17 @@ namespace LineBotCompanyTrip.Controllers {
 					.CreateAction( "buttons" )
 					.AddPostbackAction(
 						"たくさん写真撮られた人" ,
-						"a" ,
+						CommonEnum.PostbackEvent.count.ToString() ,
 						"誰がたくさん撮られたの？"
 					)
 					.AddPostbackAction(
 						"笑顔ランキング" ,
-						"b" ,
+						CommonEnum.PostbackEvent.happiness.ToString() ,
 						"笑顔ランキング見せて！"
 					)
 					.AddPostbackAction(
 						"表情豊かランキング" ,
-						"c" ,
+						CommonEnum.PostbackEvent.emotion.ToString() ,
 						"表情豊かなのは誰！？"
 					)
 					.GetActions()
@@ -346,7 +344,7 @@ namespace LineBotCompanyTrip.Controllers {
 		/// <param name="userId">ユーザID</param>
 		/// <param name="groupId">グループID</param>
 		/// <returns>ステータス200</returns>
-		private HttpResponseMessage CountRankingEvent( 
+		private async Task<HttpResponseMessage> CountRankingEvent( 
 			string replyToken ,
 			string userId ,
 			string groupId 
@@ -357,6 +355,23 @@ namespace LineBotCompanyTrip.Controllers {
 			// TODO postbackステータス更新
 
 			// TODO DBより画像を3枚取得
+			string url1 = "https://manuke.jp/wp-content/uploads/2016/05/chomado2.jpg";
+			string url2 = "https://manuke.jp/wp-content/uploads/2016/05/chomado2.jpg";
+			string url3 = "https://manuke.jp/wp-content/uploads/2016/05/chomado2.jpg";
+
+			//解析結果の通知
+			{
+
+				ReplyMessageService replyMessageService = new ReplyMessageService( replyToken );
+				await replyMessageService
+				.AddTextMessage( "よく写真に写ってた方は以下のお三方です！" )
+				.AddImageMessage( url1 , url1 )
+				.AddImageMessage( url2 , url2 )
+				.AddImageMessage( url3 , url3 )
+				.AddTextMessage( "たっくさん撮られましたね！" )
+				.Send();
+
+			}
 
 			return new HttpResponseMessage( HttpStatusCode.OK );
 
@@ -369,7 +384,7 @@ namespace LineBotCompanyTrip.Controllers {
 		/// <param name="userId">ユーザID</param>
 		/// <param name="groupId">グループID</param>
 		/// <returns>ステータス200</returns>
-		private HttpResponseMessage HappinessRankingEvent(
+		private async Task<HttpResponseMessage> HappinessRankingEvent(
 			string replyToken ,
 			string userId ,
 			string groupId
@@ -380,6 +395,23 @@ namespace LineBotCompanyTrip.Controllers {
 			// TODO postbackステータス更新
 
 			// TODO DBより画像を3枚取得
+			string url1 = "https://manuke.jp/wp-content/uploads/2016/05/chomado2.jpg";
+			string url2 = "https://manuke.jp/wp-content/uploads/2016/05/chomado2.jpg";
+			string url3 = "https://manuke.jp/wp-content/uploads/2016/05/chomado2.jpg";
+
+			//解析結果の通知
+			{
+
+				ReplyMessageService replyMessageService = new ReplyMessageService( replyToken );
+				await replyMessageService
+				.AddTextMessage( "笑顔の眩しい方は以下のお三方です！" )
+				.AddImageMessage( url1 , url1 )
+				.AddImageMessage( url2 , url2 )
+				.AddImageMessage( url3 , url3 )
+				.AddTextMessage( "(⌒-⌒)ﾆｺﾆｺ" )
+				.Send();
+
+			}
 
 			return new HttpResponseMessage( HttpStatusCode.OK );
 
@@ -392,7 +424,7 @@ namespace LineBotCompanyTrip.Controllers {
 		/// <param name="userId">ユーザID</param>
 		/// <param name="groupId">グループID</param>
 		/// <returns>ステータス200</returns>
-		private HttpResponseMessage EmotionRankingEvent(
+		private async Task<HttpResponseMessage> EmotionRankingEvent(
 			string replyToken ,
 			string userId ,
 			string groupId
@@ -403,6 +435,23 @@ namespace LineBotCompanyTrip.Controllers {
 			// TODO postbackステータス更新
 
 			// TODO DBより画像を3枚取得
+			string url1 = "https://manuke.jp/wp-content/uploads/2016/05/chomado2.jpg";
+			string url2 = "https://manuke.jp/wp-content/uploads/2016/05/chomado2.jpg";
+			string url3 = "https://manuke.jp/wp-content/uploads/2016/05/chomado2.jpg";
+
+			//解析結果の通知
+			{
+
+				ReplyMessageService replyMessageService = new ReplyMessageService( replyToken );
+				await replyMessageService
+				.AddTextMessage( "笑顔に限らず、表情豊かな方は以下のお三方です！" )
+				.AddImageMessage( url1 , url1 )
+				.AddImageMessage( url2 , url2 )
+				.AddImageMessage( url3 , url3 )
+				.AddTextMessage( "Σd(ﾟдﾟ*)ｸﾞｯｼﾞｮﾌﾞ" )
+				.Send();
+
+			}
 
 			return new HttpResponseMessage( HttpStatusCode.OK );
 
