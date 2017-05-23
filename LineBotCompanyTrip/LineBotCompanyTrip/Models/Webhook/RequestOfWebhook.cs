@@ -11,6 +11,28 @@ namespace LineBotCompanyTrip.Models.Webhook {
 		/// イベント情報
 		/// </summary>
 		public class Event {
+
+			/// <summary>
+			/// イベント送信元を表すオブジェクト
+			/// </summary>
+			public class Source {
+
+				/// <summary>
+				/// 種別
+				/// </summary>
+				public string type;
+
+				/// <summary>
+				/// ユーザID
+				/// </summary>
+				public string userId;
+
+				/// <summary>
+				/// グループID
+				/// </summary>
+				public string groupId;
+
+			}
 		
 			/// <summary>
 			/// メッセージ情報
@@ -20,62 +42,84 @@ namespace LineBotCompanyTrip.Models.Webhook {
 				/// <summary>
 				/// メッセージID
 				/// </summary>
-				public string id { set; get; }
+				public string id;
 
 				/// <summary>
 				/// メッセージ種別
 				/// </summary>
-				public string type { set; get; }
+				public string type;
 
 				/// <summary>
 				/// メッセージ本文
 				/// </summary>
-				public string text { set; get; }
+				public string text;
 
 				/// <summary>
 				/// タイトル
 				/// </summary>
-				public string title { set; get; }
+				public string title;
 
 				/// <summary>
 				/// 住所
 				/// </summary>
-				public string address { set; get; }
+				public string address;
 
 				/// <summary>
 				/// 緯度
 				/// </summary>
-				public double latitude { set; get; }
+				public double latitude;
 
 				/// <summary>
 				/// 経度
 				/// </summary>
-				public double longitude { set; get; }
-				
+				public double longitude;
+
+			}
+
+			/// <summary>
+			/// ポストバック
+			/// </summary>
+			public class Postback {
+
+				/// <summary>
+				/// ポストバックデータ
+				/// </summary>
+				public string data;
+
 			}
 
 			/// <summary>
 			/// イベント種別
 			/// </summary>
-			public string type { set; get; }
+			public string type;
 
 			/// <summary>
 			/// リプライトークン
 			/// </summary>
-			public string replyToken { set; get; }
+			public string replyToken;
+
+			/// <summary>
+			/// ポストバック
+			/// </summary>
+			public Postback postback;
+
+			/// <summary>
+			/// イベント送信元を表すオブジェクト
+			/// </summary>
+			public Source source;
 
 			/// <summary>
 			/// メッセージオブジェクト
 			/// </summary>
-			public MessageObject message { set; get; }
+			public MessageObject message;
 
 		}
 
 		/// <summary>
 		/// イベントリスト
 		/// </summary>
-		public List<Event> events { set; get; }
-		
+		public List<Event> events;
+
 	}
 
 }

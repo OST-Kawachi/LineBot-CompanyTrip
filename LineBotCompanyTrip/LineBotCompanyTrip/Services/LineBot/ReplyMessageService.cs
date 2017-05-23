@@ -507,9 +507,20 @@ namespace LineBotCompanyTrip.Services.LineBot {
 			client.DefaultRequestHeaders.Accept.Add( new MediaTypeWithQualityHeaderValue( "application/json" ) );
 			client.DefaultRequestHeaders.Add( "Authorization" , "Bearer {" + LineBotConfig.ChannelAccessToken + "}" );
 
-			HttpResponseMessage response = await client.PostAsync( LineBotConfig.ReplyMessageUrl , content ).ConfigureAwait( false );
-			string result = await response.Content.ReadAsStringAsync().ConfigureAwait( false );
-			Trace.TraceInformation( "Reply Message Status Code is : " + response.StatusCode );
+			try {
+				HttpResponseMessage response = await client.PostAsync( LineBotConfig.ReplyMessageUrl , content );
+				string result = await response.Content.ReadAsStringAsync();
+				Trace.TraceInformation( "Reply Message Status Code is : " + response.StatusCode );
+			}
+			catch( ArgumentNullException e ) {
+				Trace.TraceInformation( "Emotion API Argument Null Exception " + e.Message );
+			}
+			catch( HttpRequestException e ) {
+				Trace.TraceInformation( "Emotion API Http Request Exception " + e.Message );
+			}
+			catch( Exception e ) {
+				Trace.TraceInformation( "予期せぬ例外 " + e.Message );
+			}
 
 		}
 		

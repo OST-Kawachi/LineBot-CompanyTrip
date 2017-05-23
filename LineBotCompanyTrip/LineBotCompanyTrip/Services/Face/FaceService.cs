@@ -1,5 +1,5 @@
 ﻿using LineBotCompanyTrip.Configurations;
-using LineBotCompanyTrip.Models.AzureCognitiveServices.EmotionAPI;
+using LineBotCompanyTrip.Models.AzureCognitiveServices.FaceAPI;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
@@ -9,33 +9,33 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading.Tasks;
 
-namespace LineBotCompanyTrip.Services.Emotion {
+namespace LineBotCompanyTrip.Services.Face{
 
 	/// <summary>
-	/// Azure Cognitive Services Emotion APIに関するサービスクラス
+	/// Azure Cognitive Services Face APIに関するサービスクラス
 	/// </summary>
-	public class EmotionService {
+	public class FaceService {
 
 		/// <summary>
-		/// Emotion APIを呼び出す
+		/// Face APIを呼び出す
 		/// </summary>
 		/// <param name="binaryImage">画像のバイナリデータ</param>
 		/// <returns>APIレスポンス</returns>
-		public async Task<List<ResponseOfEmotionAPI>> Call( Stream binaryImage ) {
-			
+		public async Task<List<ResponseOfFaceAPI>> Call( Stream binaryImage ) {
+
 			StreamContent content = new StreamContent( binaryImage );
 			content.Headers.ContentType = new MediaTypeHeaderValue( "application/octet-stream" );
-			
+
 			HttpClient client = new HttpClient();
 			client.DefaultRequestHeaders.Accept.Add( new MediaTypeWithQualityHeaderValue( "application/octet-stream" ) );
-			client.DefaultRequestHeaders.Add( "Ocp-Apim-Subscription-Key" , EmotionConfig.OcpApimSubscriptionKey );
+			client.DefaultRequestHeaders.Add( "Ocp-Apim-Subscription-Key" , FaceConfig.OcpApimSubscriptionKey );
 
 			try {
 
-				HttpResponseMessage response = await client.PostAsync( EmotionConfig.EmotionApiUrl , content );
+				HttpResponseMessage response = await client.PostAsync( FaceConfig.FaceApiUrl , content );
 				string resultAsString = await response.Content.ReadAsStringAsync();
-				Trace.TraceInformation( "Emotion API Result is : " + resultAsString );
-				return JsonConvert.DeserializeObject<List<ResponseOfEmotionAPI>>( resultAsString );
+				Trace.TraceInformation( "Face API Result is : " + resultAsString );
+				return JsonConvert.DeserializeObject<List<ResponseOfFaceAPI>>( resultAsString );
 
 			}
 			catch( ArgumentNullException e ) {
@@ -50,7 +50,8 @@ namespace LineBotCompanyTrip.Services.Emotion {
 				Trace.TraceInformation( "予期せぬ例外 " + e.Message );
 				return null;
 			}
-			
+
+
 		}
 
 	}
