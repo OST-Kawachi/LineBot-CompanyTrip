@@ -5,6 +5,7 @@ using LineBotCompanyTrip.Models.Webhook;
 using LineBotCompanyTrip.Services.Emotion;
 using LineBotCompanyTrip.Services.Face;
 using LineBotCompanyTrip.Services.LineBot;
+using LineBotCompanyTrip.Services.SavePicture;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
@@ -241,11 +242,15 @@ namespace LineBotCompanyTrip.Controllers {
 			}
 			
 			// TODO Face APIの顔群とEmotionAPIの解析群の紐づけ
-
+			
 			// TODO DBに画像情報を登録
 
-			// TODO 画像をサーバに保存
-			string url = "https://manuke.jp/wp-content/uploads/2016/05/chomado2.jpg";
+			//画像をサーバに保存
+			string url = null;
+			{
+				SavePictureInAzureStorageService savePictureInAzureStorageService = new SavePictureInAzureStorageService();
+				url = savePictureInAzureStorageService.SaveImage( imageBytes );
+			}
 
 			//解析結果の通知
 			{
