@@ -53,6 +53,20 @@
 			happiness ,
 			emotion
 		}
+
+		/// <summary>
+		/// Emotion APIの表情の種類
+		/// </summary>
+		public enum EmotionType {
+			anger ,
+			contempt ,
+			disgust ,
+			fear ,
+			happiness ,
+			neutral ,
+			sadness ,
+			surprise
+		}
 		
 	}
 

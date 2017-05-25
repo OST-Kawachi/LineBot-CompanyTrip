@@ -119,7 +119,7 @@ namespace LineBotCompanyTrip.Services.LineBot {
 					return this;
 				}
 				else if( this.ActionsIndex != 0 ) {
-					Array.Resize<RequestOfReplyMessage.Message.Template.Action>( ref this.actions , this.ActionsIndex + 1 );
+					Array.Resize( ref this.actions , this.ActionsIndex + 1 );
 				}
 
 				RequestOfReplyMessage.Message.Template.Action action = new RequestOfReplyMessage.Message.Template.Action();
@@ -147,7 +147,7 @@ namespace LineBotCompanyTrip.Services.LineBot {
 					return this;
 				}
 				else if( this.ActionsIndex != 0 ) {
-					Array.Resize<RequestOfReplyMessage.Message.Template.Action>( ref this.actions , this.ActionsIndex + 1 );
+					Array.Resize( ref this.actions , this.ActionsIndex + 1 );
 				}
 
 				RequestOfReplyMessage.Message.Template.Action action = new RequestOfReplyMessage.Message.Template.Action();
@@ -435,7 +435,7 @@ namespace LineBotCompanyTrip.Services.LineBot {
 				return this;
 			}
 			else if( this.MessagesIndex != 0 ) {
-				Array.Resize<RequestOfReplyMessage.Message>( ref this.Request.messages , this.MessagesIndex + 1 );
+				Array.Resize( ref this.Request.messages , this.MessagesIndex + 1 );
 			}
 			
 			RequestOfReplyMessage.Message.Template template = new RequestOfReplyMessage.Message.Template();

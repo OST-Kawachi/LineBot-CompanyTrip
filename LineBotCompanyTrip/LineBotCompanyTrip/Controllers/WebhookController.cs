@@ -5,11 +5,13 @@ using LineBotCompanyTrip.Models.Webhook;
 using LineBotCompanyTrip.Services.Emotion;
 using LineBotCompanyTrip.Services.Face;
 using LineBotCompanyTrip.Services.LineBot;
+using LineBotCompanyTrip.Services.ProcessPicture;
 using LineBotCompanyTrip.Services.SavePicture;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Drawing;
 using System.Net;
 using System.Net.Http;
 using System.Text.RegularExpressions;
@@ -240,17 +242,28 @@ namespace LineBotCompanyTrip.Controllers {
 				EmotionService emotionService = new EmotionService();
 				responseOfEmotionAPI = await emotionService.Call( imageBytes );
 			}
-			
+
 			// TODO Face APIの顔群とEmotionAPIの解析群の紐づけ
 			
-			// TODO DBに画像情報を登録
+			//画像を加工
+			byte[] processedImageBytes = new byte[ imageBytes.Length ];
+			imageBytes.CopyTo( processedImageBytes , 0 );
+			{
+				foreach( ResponseOfEmotionAPI response in responseOfEmotionAPI ) {
+					processedImageBytes = this.DrawAnalysis( processedImageBytes , response );
+				}
+			}
 
 			//画像をサーバに保存
-			string url = null;
+			string originalUrl = null;
+			string processedUrl = null;
 			{
 				SavePictureInAzureStorageService savePictureInAzureStorageService = new SavePictureInAzureStorageService();
-				url = savePictureInAzureStorageService.SaveImage( imageBytes );
+				originalUrl = savePictureInAzureStorageService.SaveImage( imageBytes );
+				processedUrl = savePictureInAzureStorageService.SaveImage( processedImageBytes );
 			}
+
+			// TODO DBに画像情報を登録
 
 			//解析結果の通知
 			{
@@ -269,7 +282,7 @@ namespace LineBotCompanyTrip.Controllers {
 				await replyMessageService
 				.AddTextMessage( "画像が送られてきました！" )
 				.AddTextMessage( sendText )
-				.AddImageMessage( url , url )
+				.AddImageMessage( processedUrl , processedUrl )
 				.Send();
 
 			}
@@ -279,58 +292,206 @@ namespace LineBotCompanyTrip.Controllers {
 		}
 
 		/// <summary>
+		/// 解析結果を画像のバイナリデータに描画する
+		/// </summary>
+		/// <param name="imageBytes">画像のバイナリデータ</param>
+		/// <param name="response">Emotion APIで取得した結果</param>
+		/// <returns>描画後画像のバイナリデータ</returns>
+		private byte[] DrawAnalysis( byte[] imageBytes , ResponseOfEmotionAPI response ) {
+
+			ProcessPictureService processPictureService = new ProcessPictureService();
+
+			CommonEnum.EmotionType type = CommonEnum.EmotionType.neutral;
+			double value = 0.0;
+			this.GetMostEmotion( response , ref type , ref value );
+
+			Pen penColor;
+			Brush brushColor;
+			switch( type ) {
+				case CommonEnum.EmotionType.happiness:
+					penColor = Pens.Pink;
+					brushColor = Brushes.Pink;
+					break;
+				case CommonEnum.EmotionType.anger:
+					penColor = Pens.Red;
+					brushColor = Brushes.Red;
+					break;
+				case CommonEnum.EmotionType.contempt:
+					penColor = Pens.Orange;
+					brushColor = Brushes.Orange;
+					break;
+				case CommonEnum.EmotionType.sadness:
+					penColor = Pens.Blue;
+					brushColor = Brushes.Blue;
+					break;
+				case CommonEnum.EmotionType.disgust:
+					penColor = Pens.Aqua;
+					brushColor = Brushes.Aqua;
+					break;
+				case CommonEnum.EmotionType.fear:
+					penColor = Pens.Yellow;
+					brushColor = Brushes.Yellow;
+					break;
+				case CommonEnum.EmotionType.surprise:
+					penColor = Pens.Green;
+					brushColor = Brushes.Green;
+					break;
+				default:
+					penColor = Pens.Gray;
+					brushColor = Brushes.Gray;
+					break;
+			}
+			
+			imageBytes =  processPictureService.DrawFrame(
+				imageBytes ,
+				response.faceRectangle.left ,
+				response.faceRectangle.top ,
+				response.faceRectangle.width ,
+				response.faceRectangle.height ,
+				penColor
+			);
+
+			imageBytes = processPictureService.DrawMessage(
+				imageBytes ,
+				response.faceRectangle.left ,
+				response.faceRectangle.top ,
+				penColor ,
+				brushColor ,
+				"あけましておめでとうございます"
+			);
+
+			return imageBytes;
+
+		}
+
+		/// <summary>
+		/// レスポンスから最も近い解析結果を返す
+		/// </summary>
+		/// <param name="response">レスポンス</param>
+		/// <param name="type">表情種別</param>
+		/// <param name="value">表情評価</param>
+		private void GetMostEmotion( ResponseOfEmotionAPI response , ref CommonEnum.EmotionType type , ref double value ) {
+
+			//幸せ度40%以上で幸せ認定
+			double happiness = Math.Truncate( response.scores.happiness * 10000 ) / 10000;
+			if( happiness > 0.4 ) {
+				type = CommonEnum.EmotionType.happiness;
+				value = happiness;
+				return;
+			}
+
+			//悲しみ度40%以上で幸せ認定
+			double sadness = Math.Truncate( response.scores.sadness * 10000 ) / 10000;
+			if( sadness > 0.4 ) {
+				type = CommonEnum.EmotionType.sadness;
+				value = sadness;
+				return;
+			}
+
+			//ビビり度40%以上で幸せ認定
+			double fear = Math.Truncate( response.scores.fear * 10000 ) / 10000;
+			if( fear > 0.4 ) {
+				type = CommonEnum.EmotionType.fear;
+				value = fear;
+				return;
+			}
+
+			//怒り度40%以上で幸せ認定
+			double anger = Math.Truncate( response.scores.anger * 10000 ) / 10000;
+			if( anger > 0.4 ) {
+				type = CommonEnum.EmotionType.anger;
+				value = anger;
+				return;
+			}
+
+			//軽蔑度40%以上で幸せ認定
+			double contempt = Math.Truncate( response.scores.contempt * 10000 ) / 10000;
+			if( contempt > 0.4 ) {
+				type = CommonEnum.EmotionType.contempt;
+				value = contempt;
+				return;
+			}
+
+			//うんざり度40%以上で幸せ認定
+			double disgust = Math.Truncate( response.scores.disgust * 10000 ) / 10000;
+			if( disgust > 0.4 ) {
+				type = CommonEnum.EmotionType.disgust;
+				value = disgust;
+				return;
+			}
+
+			//驚き度40%以上で幸せ認定
+			double surprise = Math.Truncate( response.scores.surprise * 10000 ) / 10000;
+			if( surprise > 0.4 ) {
+				type = CommonEnum.EmotionType.surprise;
+				value = surprise;
+				return;
+			}
+
+			//どれも40%超えてなかった場合は真顔認定
+			double neutral = Math.Truncate( response.scores.neutral * 10000 ) / 10000;
+			type = CommonEnum.EmotionType.neutral;
+			value = neutral;
+
+		}
+
+		/// <summary>
 		/// 解析結果を返す
 		/// </summary>
 		/// <param name="resultOfEmotion">Emotion APIの結果</param>
 		/// <returns>解析結果</returns>
 		private string GetAnalysis( ResponseOfEmotionAPI resultOfEmotion ) {
-			
-			//幸せ度40%以上で幸せ認定
-			double happiness = Math.Truncate( resultOfEmotion.scores.happiness * 10000 ) / 10000;
-			if( happiness > 0.4 )
-				return "喜び度:" + CommonUtil.ConvertDecimalIntoPercentage( happiness ) + "！！！\n"
+
+			CommonEnum.EmotionType type = CommonEnum.EmotionType.neutral;
+			double value = 0.0;
+			this.GetMostEmotion( resultOfEmotion , ref type , ref value );
+
+			string text;
+			switch( type ) {
+
+				case CommonEnum.EmotionType.happiness:
+					text = "喜び度:" + CommonUtil.ConvertDecimalIntoPercentage( value ) + "！！！\n"
 					+ "(*´∇｀*)ﾆﾊﾟｰｯ";
+					break;
 
-			//悲しみ度40%以上で幸せ認定
-			double sadness = Math.Truncate( resultOfEmotion.scores.sadness * 10000 ) / 10000;
-			if( sadness > 0.4 )
-				return "悲しみ度:" + CommonUtil.ConvertDecimalIntoPercentage( sadness ) + "！！！\n"
+				case CommonEnum.EmotionType.sadness:
+					text = "悲しみ度:" + CommonUtil.ConvertDecimalIntoPercentage( value ) + "！！！\n"
 					+ "｡ﾟ(ﾟ´Д｀ﾟ)゜｡ｳｧｧｧﾝ";
+					break;
 
-			//ビビり度40%以上で幸せ認定
-			double fear = Math.Truncate( resultOfEmotion.scores.fear * 10000 ) / 10000;
-			if( fear > 0.4 )
-			return "ビビり度:" + CommonUtil.ConvertDecimalIntoPercentage( fear ) + "！！！\n"
+				case CommonEnum.EmotionType.fear:
+					text = "ビビり度:" + CommonUtil.ConvertDecimalIntoPercentage( value ) + "！！！\n"
 					+ "((( ；ﾟДﾟ)))ｶﾞｸｶﾞｸﾌﾞﾙﾌﾞﾙ";
+					break;
 
-			//怒り度40%以上で幸せ認定
-			double anger = Math.Truncate( resultOfEmotion.scores.anger * 10000 ) / 10000;
-			if( anger > 0.4 )
-				return "怒り度:" + CommonUtil.ConvertDecimalIntoPercentage( anger ) + "！！！\n"
+				case CommonEnum.EmotionType.anger:
+					text = "怒り度:" + CommonUtil.ConvertDecimalIntoPercentage( value ) + "！！！\n"
 					+ "ﾝﾓｫｰ!! o(*≧д≦)o″))";
+					break;
 
-			//軽蔑度40%以上で幸せ認定
-			double contempt = Math.Truncate( resultOfEmotion.scores.contempt * 10000 ) / 10000;
-			if( contempt > 0.4 )
-				return "軽蔑度:" + CommonUtil.ConvertDecimalIntoPercentage( contempt ) + "！！！\n"
+				case CommonEnum.EmotionType.contempt:
+					text = "軽蔑度:" + CommonUtil.ConvertDecimalIntoPercentage( value ) + "！！！\n"
 					+ "(￢_￢;)ﾄﾞﾝﾋﾞｷ";
+					break;
 
-			//うんざり度40%以上で幸せ認定
-			double disgust = Math.Truncate( resultOfEmotion.scores.disgust * 10000 ) / 10000;
-			if( disgust > 0.4 )
-				return "うんざり度:" + CommonUtil.ConvertDecimalIntoPercentage( disgust ) + "！！！\n"
+				case CommonEnum.EmotionType.disgust:
+					text = "うんざり度:" + CommonUtil.ConvertDecimalIntoPercentage( value ) + "！！！\n"
 					+ "┐(´～｀)┌ ﾔﾚﾔﾚ";
+					break;
 
-			//驚き度40%以上で幸せ認定
-			double surprise = Math.Truncate( resultOfEmotion.scores.surprise * 10000 ) / 10000;
-			if( surprise > 0.4 )
-				return "驚き度:" + CommonUtil.ConvertDecimalIntoPercentage( surprise ) + "！！！\n"
+				case CommonEnum.EmotionType.surprise:
+					text = "驚き度:" + CommonUtil.ConvertDecimalIntoPercentage( value ) + "！！！\n"
 					+ "工エエェ(ﾟ〇ﾟ ;)ェエエ工";
+					break;
 
-			//どれも40%超えてなかった場合は真顔認定
-			double neutral = Math.Truncate( resultOfEmotion.scores.neutral * 10000 ) / 10000;
-			return "真顔度:" + CommonUtil.ConvertDecimalIntoPercentage( neutral ) + "！！！\n"
-				+ "(´・_・｀)";
+				default:
+					text = "真顔度:" + CommonUtil.ConvertDecimalIntoPercentage( value ) + "！！！\n"
+					+ "(´・_・｀)";
+					break;
+					
+			}
+
+			return text;
 			
 		}
 
