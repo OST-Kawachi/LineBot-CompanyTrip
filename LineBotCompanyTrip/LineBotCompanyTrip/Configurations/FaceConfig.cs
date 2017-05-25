@@ -13,7 +13,7 @@
 		/// <summary>
 		/// Face APIのURL
 		/// </summary>
-		public static readonly string FaceApiUrl = "";
+		public static readonly string FaceApiUrl = "https://westus.api.cognitive.microsoft.com/face/v1.0/detect/";
 
 	}
 }
