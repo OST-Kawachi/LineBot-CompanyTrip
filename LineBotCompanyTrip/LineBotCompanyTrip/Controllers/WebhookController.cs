@@ -307,38 +307,47 @@ namespace LineBotCompanyTrip.Controllers {
 
 			Pen penColor;
 			Brush brushColor;
+			string text;
 			switch( type ) {
 				case CommonEnum.EmotionType.happiness:
 					penColor = Pens.Pink;
 					brushColor = Brushes.Pink;
+					text = "Happy:" + CommonUtil.ConvertDecimalIntoPercentage( value );
 					break;
 				case CommonEnum.EmotionType.anger:
 					penColor = Pens.Red;
 					brushColor = Brushes.Red;
+					text = "Anger:" + CommonUtil.ConvertDecimalIntoPercentage( value );
 					break;
 				case CommonEnum.EmotionType.contempt:
 					penColor = Pens.Orange;
 					brushColor = Brushes.Orange;
+					text = "Contempt:" + CommonUtil.ConvertDecimalIntoPercentage( value );
 					break;
 				case CommonEnum.EmotionType.sadness:
 					penColor = Pens.Blue;
 					brushColor = Brushes.Blue;
+					text = "Sadness:" + CommonUtil.ConvertDecimalIntoPercentage( value );
 					break;
 				case CommonEnum.EmotionType.disgust:
 					penColor = Pens.Aqua;
 					brushColor = Brushes.Aqua;
+					text = "Disgust:" + CommonUtil.ConvertDecimalIntoPercentage( value );
 					break;
 				case CommonEnum.EmotionType.fear:
 					penColor = Pens.Yellow;
 					brushColor = Brushes.Yellow;
+					text = "Fear:" + CommonUtil.ConvertDecimalIntoPercentage( value );
 					break;
 				case CommonEnum.EmotionType.surprise:
 					penColor = Pens.Green;
 					brushColor = Brushes.Green;
+					text = "Surprise:" + CommonUtil.ConvertDecimalIntoPercentage( value );
 					break;
 				default:
 					penColor = Pens.Gray;
 					brushColor = Brushes.Gray;
+					text = "Neutral:" + CommonUtil.ConvertDecimalIntoPercentage( value );
 					break;
 			}
 			
@@ -357,7 +366,7 @@ namespace LineBotCompanyTrip.Controllers {
 				response.faceRectangle.top ,
 				penColor ,
 				brushColor ,
-				"あけましておめでとうございます"
+				text
 			);
 
 			return imageBytes;

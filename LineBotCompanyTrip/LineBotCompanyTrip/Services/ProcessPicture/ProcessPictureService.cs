@@ -67,10 +67,20 @@ namespace LineBotCompanyTrip.Services.ProcessPicture {
 
 			Bitmap bitmap = new Bitmap( new MemoryStream( imageBytes ) );
 			Graphics graphics = Graphics.FromImage( bitmap );
-			Font font = new Font( "MS UI Gothic" , 20 );
+			Font font = new Font( "MS UI Gothic" , 10 );
 
-			graphics.FillRectangle( brush , posX , posY , message.Length * 5 , 20 );
-			graphics.DrawString( message , font , Brushes.White , posX , posY );
+			graphics.FillRectangle( brush , posX - 2 , posY - 12 , message.Length * 5 + 20 , 12 );
+			graphics.DrawString( 
+				message , 
+				font , 
+				( 
+					pen == Pens.Aqua || pen == Pens.Pink || pen == Pens.Yellow || pen == Pens.Orange
+					? Brushes.Black 
+					: Brushes.White 
+				) , 
+				posX - 2 , 
+				posY - 12
+			);
 
 			font.Dispose();
 
