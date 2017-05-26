@@ -99,6 +99,11 @@ namespace LineBotCompanyTrip.Models.Webhook {
 			public string replyToken;
 
 			/// <summary>
+			/// Webhook受信日時
+			/// </summary>
+			public string timestamp;
+
+			/// <summary>
 			/// ポストバック
 			/// </summary>
 			public Postback postback;
