@@ -27,14 +27,7 @@ namespace LineBotCompanyTrip.Services.SavePicture {
 		/// 画像を保存するコンテナ名
 		/// </summary>
 		private static readonly string ContainerName = "pictures";
-
-		/// <summary>
-		/// 保存する画像名
-		/// pic_(本日日付).jpg
-		/// 例：pic_20170525142715.jpg
-		/// </summary>
-		private static readonly string PictureName = "pic_";
-
+		
 		/// <summary>
 		/// コンストラクタ
 		/// Azure Storageに接続し、picturesコンテナを取得
@@ -55,18 +48,14 @@ namespace LineBotCompanyTrip.Services.SavePicture {
 		/// 画像を保存する
 		/// </summary>
 		/// <param name="imageBytes">画像のバイナリデータ</param>
+		/// <param name="timestamp">Webhook受信日時</param>
+		/// <param name="isOriginal">オリジナル画像かどうか</param>
 		/// <returns>URL</returns>
-		public string SaveImage( byte[] imageBytes ) {
+		public string SaveImage( byte[] imageBytes , string timestamp , bool isOriginal ) {
 			
-			string pictureName =
-				SavePictureInAzureStorageService.PictureName +
-				DateTime.Now.Year.ToString() +
-				DateTime.Now.Month.ToString() +
-				DateTime.Now.Day.ToString() +
-				DateTime.Now.Hour.ToString() +
-				DateTime.Now.Minute.ToString() +
-				DateTime.Now.Second.ToString() +
-				DateTime.Now.Millisecond.ToString() + 
+			string pictureName = 
+				( isOriginal ? "original_" : "processed_" ) +
+				timestamp + 
 				".jpg";
 
 			Trace.TraceInformation( "Picture Name is : " + pictureName );

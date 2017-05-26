@@ -89,7 +89,8 @@ namespace LineBotCompanyTrip.Controllers {
 						firstEvent.replyToken , 
 						firstEvent.source.userId ,
 						firstEvent.source.groupId ,
-						message.id 
+						message.id ,
+						firstEvent.timestamp
 					);
 
 			}
@@ -213,12 +214,14 @@ namespace LineBotCompanyTrip.Controllers {
 		/// <param name="userId">ユーザID</param>
 		/// <param name="groupId">グループID</param>
 		/// <param name="messageId">メッセージID</param>
+		/// <param name="timestamp">Webhook受信日時</param>
 		/// <returns>ステータス200</returns>
 		private async Task<HttpResponseMessage> ImageMessageEvent( 
 			string replyToken ,
 			string userId ,
 			string groupId ,
-			string messageId ) {
+			string messageId ,
+			string timestamp ) {
 
 			Trace.TraceInformation( "メッセージイベント通知－画像" );
 
@@ -259,8 +262,8 @@ namespace LineBotCompanyTrip.Controllers {
 			string processedUrl = null;
 			{
 				SavePictureInAzureStorageService savePictureInAzureStorageService = new SavePictureInAzureStorageService();
-				originalUrl = savePictureInAzureStorageService.SaveImage( imageBytes );
-				processedUrl = savePictureInAzureStorageService.SaveImage( processedImageBytes );
+				originalUrl = savePictureInAzureStorageService.SaveImage( imageBytes , timestamp , true );
+				processedUrl = savePictureInAzureStorageService.SaveImage( processedImageBytes , timestamp , false );
 			}
 
 			// TODO DBに画像情報を登録
@@ -268,23 +271,30 @@ namespace LineBotCompanyTrip.Controllers {
 			//解析結果の通知
 			{
 
-				string sendText = "";
 				if( responseOfEmotionAPI == null || responseOfEmotionAPI.Count == 0 ) {
-					sendText = "顔は検出できませんでした！\nいいお写真ですね！";
+
+					ReplyMessageService replyMessageService = new ReplyMessageService( replyToken );
+					await replyMessageService
+					.AddTextMessage( "顔は検出できませんでした！\nいいお写真ですね！" )
+					.AddImageMessage( processedUrl , processedUrl )
+					.Send();
+					
 				}
 				else {
+
+					string sendText = "";
 					foreach( ResponseOfEmotionAPI resultOfEmotion in responseOfEmotionAPI ) {
 						sendText += this.GetAnalysis( resultOfEmotion ) + "\n\n";
 					}
+
+					ReplyMessageService replyMessageService = new ReplyMessageService( replyToken );
+					await replyMessageService
+					.AddTextMessage( sendText )
+					.AddImageMessage( processedUrl , processedUrl )
+					.Send();
+
 				}
-
-				ReplyMessageService replyMessageService = new ReplyMessageService( replyToken );
-				await replyMessageService
-				.AddTextMessage( "画像が送られてきました！" )
-				.AddTextMessage( sendText )
-				.AddImageMessage( processedUrl , processedUrl )
-				.Send();
-
+				
 			}
 
 			return new HttpResponseMessage( HttpStatusCode.OK );
