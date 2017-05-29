@@ -1,7 +1,6 @@
 ﻿using LineBotCompanyTrip.Configurations;
 using System;
 using System.Diagnostics;
-using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading.Tasks;
@@ -27,18 +26,23 @@ namespace LineBotCompanyTrip.Services.LineBot {
 			try {
 				HttpResponseMessage response = await client.GetAsync( LineBotConfig.GetContentUrl( messageId ) );
 				byte[] result = await response.Content.ReadAsByteArrayAsync();
+				response.Dispose();
+				client.Dispose();
 				Trace.TraceInformation( "Get Binary Image is : " + result != null ? "SUCCESS" : "FAILED" );
 				return result;
 			}
 			catch( ArgumentNullException e ) {
+				client.Dispose();
 				Trace.TraceInformation( "Emotion API Argument Null Exception " + e.Message );
 				return null;
 			}
 			catch( HttpRequestException e ) {
+				client.Dispose();
 				Trace.TraceInformation( "Emotion API Http Request Exception " + e.Message );
 				return null;
 			}
 			catch( Exception e ) {
+				client.Dispose();
 				Trace.TraceInformation( "予期せぬ例外 " + e.Message );
 				return null;
 			}

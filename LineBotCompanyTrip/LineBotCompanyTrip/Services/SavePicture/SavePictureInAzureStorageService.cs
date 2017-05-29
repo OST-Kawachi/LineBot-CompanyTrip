@@ -51,17 +51,20 @@ namespace LineBotCompanyTrip.Services.SavePicture {
 		/// <param name="timestamp">Webhook受信日時</param>
 		/// <param name="isOriginal">オリジナル画像かどうか</param>
 		/// <returns>URL</returns>
-		public string SaveImage( byte[] imageBytes , string timestamp , bool isOriginal ) {
+		public string SaveImage( byte[] imageBytes , string timestamp , bool isOriginal , int processedIndex = -1 ) {
+
+			MemoryStream imageStream = new MemoryStream( imageBytes );
 			
 			string pictureName = 
 				( isOriginal ? "original_" : "processed_" ) +
 				timestamp + 
-				".jpg";
+				( !isOriginal ? "_" + processedIndex : "" ) +
+				".jpeg";
 
 			Trace.TraceInformation( "Picture Name is : " + pictureName );
 			
 			CloudBlockBlob cloudBlockBlob = this.cloudBlobContainer.GetBlockBlobReference( pictureName );
-			cloudBlockBlob.UploadFromStream( new MemoryStream( imageBytes ) );
+			cloudBlockBlob.UploadFromStream( imageStream );
 
 			Trace.TraceInformation( "Picture Upload In Azure Storage : SUCCESS" );
 
@@ -72,6 +75,8 @@ namespace LineBotCompanyTrip.Services.SavePicture {
 				pictureName;
 
 			Trace.TraceInformation( "Picture Path is : " + imagePath );
+
+			imageStream.Dispose();
 
 			return imagePath;
 

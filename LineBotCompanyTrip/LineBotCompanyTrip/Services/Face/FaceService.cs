@@ -23,7 +23,8 @@ namespace LineBotCompanyTrip.Services.Face{
 		/// <returns>APIレスポンス</returns>
 		public async Task<List<ResponseOfFaceAPI>> Call( byte[] binaryImage ) {
 
-			StreamContent content = new StreamContent( new MemoryStream( binaryImage ) );
+			MemoryStream binaryStream = new MemoryStream( binaryImage );
+			StreamContent content = new StreamContent( binaryStream );
 			content.Headers.ContentType = new MediaTypeHeaderValue( "application/octet-stream" );
 
 			HttpClient client = new HttpClient();
@@ -35,22 +36,34 @@ namespace LineBotCompanyTrip.Services.Face{
 				HttpResponseMessage response = await client.PostAsync( FaceConfig.FaceApiUrl , content );
 				string resultAsString = await response.Content.ReadAsStringAsync();
 				Trace.TraceInformation( "Face API Result is : " + resultAsString );
+				binaryStream.Dispose();
+				response.Dispose();
+				content.Dispose();
+				client.Dispose();
 				return JsonConvert.DeserializeObject<List<ResponseOfFaceAPI>>( resultAsString );
 
 			}
 			catch( ArgumentNullException e ) {
 				Trace.TraceInformation( "Emotion API Argument Null Exception " + e.Message );
+				binaryStream.Dispose();
+				content.Dispose();
+				client.Dispose();
 				return null;
 			}
 			catch( HttpRequestException e ) {
 				Trace.TraceInformation( "Emotion API Http Request Exception " + e.Message );
+				binaryStream.Dispose();
+				content.Dispose();
+				client.Dispose();
 				return null;
 			}
 			catch( Exception e ) {
 				Trace.TraceInformation( "予期せぬ例外 " + e.Message );
+				binaryStream.Dispose();
+				content.Dispose();
+				client.Dispose();
 				return null;
 			}
-
 
 		}
 
