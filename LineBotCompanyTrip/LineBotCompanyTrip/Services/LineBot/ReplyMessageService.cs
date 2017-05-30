@@ -29,232 +29,6 @@ namespace LineBotCompanyTrip.Services.LineBot {
 		/// メッセージの最大要素数
 		/// </summary>
 		private readonly int MaxIndex = 5;
-
-		/// <summary>
-		/// テンプレートに使用するアクション作成クラス
-		/// </summary>
-		public class ActionCreator {
-
-			/// <summary>
-			/// アクション
-			/// </summary>
-			private RequestOfReplyMessage.Message.Template.Action[] actions;
-
-			/// <summary>
-			/// アクション配列の長さ
-			/// </summary>
-			private int ActionsIndex { set; get; }
-
-			/// <summary>
-			/// アクション配列の最大値
-			/// </summary>
-			private int MaxIndex { set; get; }
-
-			/// <summary>
-			/// アクション配列を作成する
-			/// </summary>
-			/// <param name="templateType">テンプレート種別</param>
-			/// <returns>自身のオブジェクト</returns>
-			public ActionCreator CreateAction( string templateType ) {
-
-				this.actions = new RequestOfReplyMessage.Message.Template.Action[ 1 ];
-
-				if( CommonEnum.TemplateType.buttons.ToString().Equals( templateType ) ) {
-					this.MaxIndex = 4;
-				}
-				else if( CommonEnum.TemplateType.confirm.ToString().Equals( templateType ) ) {
-					this.MaxIndex = 2;
-				}
-				else if( CommonEnum.TemplateType.carousel.ToString().Equals( templateType ) ) {
-					this.MaxIndex = 3;
-				}
-
-				this.ActionsIndex = 0;
-
-				return this;
-
-			}
-
-			/// <summary>
-			/// タップ時にdataで指定された文字列がpostback eventとしてWebhookで通知されるアクションを追加する
-			/// 2つめ以降のアクションは配列を作成しながら追加する
-			/// アクションアイテムの上限を超えた場合は何もしない
-			/// </summary>
-			/// <param name="label">アクション表示名</param>
-			/// <param name="data">Webhookに送信される文字列データ</param>
-			/// <param name="text">アクション実行時に送信されるテキスト</param>
-			/// <returns>自身のオブジェクト</returns>
-			public ActionCreator AddPostbackAction( string label , string data , string text ) {
-
-				if( this.ActionsIndex == this.MaxIndex ) {
-					return this;
-				}
-				else if( this.ActionsIndex != 0 ) {
-					Array.Resize<RequestOfReplyMessage.Message.Template.Action>( ref this.actions , this.ActionsIndex + 1 );
-				}
-
-				RequestOfReplyMessage.Message.Template.Action action = new RequestOfReplyMessage.Message.Template.Action();
-				action.type = CommonEnum.ActionType.postback.ToString();
-				action.label = label;
-				action.data = data;
-				action.text = text;
-
-				this.actions[ this.ActionsIndex ] = action;
-				this.ActionsIndex++;
-
-				return this;
-
-			}
-
-			/// <summary>
-			/// タップ時にtextで指定された文字列がユーザの発言として送信されるアクションを追加する
-			/// 2つめ以降のアクションは配列を作成しながら追加する
-			/// </summary>
-			/// <param name="label">アクション表示名</param>
-			/// <param name="text">アクション実行時に送信されるテキスト</param>
-			/// <returns>自身のオブジェクト</returns>
-			public ActionCreator AddMessageAction( string label , string text ) {
-
-				if( this.ActionsIndex == this.MaxIndex ) {
-					return this;
-				}
-				else if( this.ActionsIndex != 0 ) {
-					Array.Resize( ref this.actions , this.ActionsIndex + 1 );
-				}
-
-				RequestOfReplyMessage.Message.Template.Action action = new RequestOfReplyMessage.Message.Template.Action();
-				action.type = CommonEnum.ActionType.message.ToString();
-				action.label = label;
-				action.text = text;
-
-				this.actions[ this.ActionsIndex ] = action;
-				this.ActionsIndex++;
-
-				return this;
-				
-			}
-
-			/// <summary>
-			/// タップ時にuriで指定されたURIを開くアクションを追加する
-			/// 2つめ以降のアクションは配列を作成しながら追加する
-			/// </summary>
-			/// <param name="label">アクション表示名</param>
-			/// <param name="uri">URI</param>
-			/// <returns>自身のオブジェクト</returns>
-			public ActionCreator AddUriAction( string label , string uri ) {
-
-				if( this.ActionsIndex == this.MaxIndex ) {
-					return this;
-				}
-				else if( this.ActionsIndex != 0 ) {
-					Array.Resize( ref this.actions , this.ActionsIndex + 1 );
-				}
-
-				RequestOfReplyMessage.Message.Template.Action action = new RequestOfReplyMessage.Message.Template.Action();
-				action.type = CommonEnum.ActionType.uri.ToString();
-				action.label = label;
-				action.uri = uri;
-
-				this.actions[ this.ActionsIndex ] = action;
-				this.ActionsIndex++;
-
-				return this;
-
-			}
-
-			/// <summary>
-			/// アクションの配列を返す
-			/// </summary>
-			/// <returns>アクションの配列</returns>
-			public RequestOfReplyMessage.Message.Template.Action[] GetActions() {
-
-				return this.actions;
-
-			}
-
-		}
-		
-		/// <summary>
-		/// カルーセル型テンプレートに使用するカラム作成クラス
-		/// </summary>
-		public class ColumnCreator {
-
-			/// <summary>
-			/// カラム配列
-			/// </summary>
-			private RequestOfReplyMessage.Message.Template.Column[] columns ;
-
-			/// <summary>
-			/// カラム配列の長さ
-			/// </summary>
-			private int ColumnIndex { set; get; }
-
-			/// <summary>
-			/// カラム配列の最大値
-			/// </summary>
-			private int MaxIndex { set; get; }
-
-			/// <summary>
-			/// カラム配列を作成する
-			/// </summary>
-			/// <returns>自身のオブジェクト</returns>
-			public ColumnCreator CreateAction() {
-
-				this.columns = new RequestOfReplyMessage.Message.Template.Column[ 1 ];
-				this.MaxIndex = 5;
-				this.ColumnIndex = 0;
-
-				return this;
-
-			}
-			
-			/// <summary>
-			/// カラムを追加する
-			/// 2つめ以降のカラムは配列を作成しながら追加する
-			/// </summary>
-			/// <param name="thumbnailImageUrl">画像のURL</param>
-			/// <param name="title">タイトル</param>
-			/// <param name="text">説明文</param>
-			/// <param name="actions">ボタン</param>
-			/// <returns></returns>
-			public ColumnCreator AddColumn(
-				string thumbnailImageUrl ,
-				string title ,
-				string text ,
-				RequestOfReplyMessage.Message.Template.Action[] actions
-			) {
-
-				if( this.ColumnIndex == this.MaxIndex ) {
-					return this;
-				}
-				else if( this.ColumnIndex != 0 ) {
-					Array.Resize<RequestOfReplyMessage.Message.Template.Column>( ref this.columns , this.ColumnIndex + 1 );
-				}
-
-				RequestOfReplyMessage.Message.Template.Column column = new RequestOfReplyMessage.Message.Template.Column();
-				column.thumbnailImageUrl = thumbnailImageUrl;
-				column.title = title;
-				column.text = text;
-				column.actions = actions;
-
-				this.columns[ this.ColumnIndex ] = column;
-				this.ColumnIndex++;
-
-				return this;
-				
-			}
-
-			/// <summary>
-			/// カラムの配列を返す
-			/// </summary>
-			/// <returns>カラムの配列を返す</returns>
-			public RequestOfReplyMessage.Message.Template.Column[] GetColumns() {
-				return this.columns;
-			}
-
-
-
-		}
 		
 		/// <summary>
 		/// コンストラクタ
@@ -263,9 +37,10 @@ namespace LineBotCompanyTrip.Services.LineBot {
 		/// <param name="replyToken">リプライトークン</param>
 		public ReplyMessageService( string replyToken ) {
 			
-			this.Request = new RequestOfReplyMessage();
-			this.Request.replyToken = replyToken;
-			this.Request.messages = new RequestOfReplyMessage.Message[ 1 ];
+			this.Request = new RequestOfReplyMessage() {
+				replyToken = replyToken ,
+				messages = new Message[ 1 ]
+			};
 			this.MessagesIndex = 0;
 
 		}
@@ -284,12 +59,13 @@ namespace LineBotCompanyTrip.Services.LineBot {
 				return this;
 			}
 			else if( this.MessagesIndex != 0 ) {
-				Array.Resize<RequestOfReplyMessage.Message>( ref this.Request.messages , this.MessagesIndex + 1 );
+				Array.Resize( ref this.Request.messages , this.MessagesIndex + 1 );
 			}
 
-			RequestOfReplyMessage.Message message = new RequestOfReplyMessage.Message();
-			message.type = CommonEnum.MessageType.text.ToString();
-			message.text = messageText;
+			Message message = new Message() {
+				type = CommonEnum.MessageType.text.ToString() ,
+				text = messageText
+			};
 
 			this.Request.messages[ this.MessagesIndex ] = message;
 			this.MessagesIndex++;
@@ -313,13 +89,14 @@ namespace LineBotCompanyTrip.Services.LineBot {
 				return this;
 			}
 			else if( this.MessagesIndex != 0 ) {
-				Array.Resize<RequestOfReplyMessage.Message>( ref this.Request.messages , this.MessagesIndex + 1 );
+				Array.Resize( ref this.Request.messages , this.MessagesIndex + 1 );
 			}
 
-			RequestOfReplyMessage.Message message = new RequestOfReplyMessage.Message();
-			message.type = CommonEnum.MessageType.image.ToString();
-			message.originalContentUrl = originalContentUrl;
-			message.previewImageUrl = previewImageUrl;
+			Message message = new Message() {
+				type = CommonEnum.MessageType.image.ToString() ,
+				originalContentUrl = originalContentUrl ,
+				previewImageUrl = previewImageUrl
+			};
 
 			this.Request.messages[ this.MessagesIndex ] = message;
 			this.MessagesIndex++;
@@ -350,15 +127,16 @@ namespace LineBotCompanyTrip.Services.LineBot {
 				return this;
 			}
 			else if( this.MessagesIndex != 0 ) {
-				Array.Resize<RequestOfReplyMessage.Message>( ref this.Request.messages , this.MessagesIndex + 1 );
+				Array.Resize( ref this.Request.messages , this.MessagesIndex + 1 );
 			}
 
-			RequestOfReplyMessage.Message message = new RequestOfReplyMessage.Message();
-			message.type = CommonEnum.MessageType.location.ToString();
-			message.title = title;
-			message.address = address;
-			message.latitude = latitude;
-			message.longitude = longitude;
+			Message message = new Message() {
+				type = CommonEnum.MessageType.location.ToString() ,
+				title = title ,
+				address = address ,
+				latitude = latitude ,
+				longitude = longitude
+			};
 
 			this.Request.messages[ this.MessagesIndex ] = message;
 			this.MessagesIndex++;
@@ -384,7 +162,7 @@ namespace LineBotCompanyTrip.Services.LineBot {
 			string thumbnailImageUrl ,
 			string title ,
 			string text ,
-			RequestOfReplyMessage.Message.Template.Action[] actions 
+			Models.LineBot.ReplyMessage.Action[] actions 
 		) {
 
 			if( this.MessagesIndex == this.MaxIndex ) {
@@ -392,20 +170,22 @@ namespace LineBotCompanyTrip.Services.LineBot {
 				return this;
 			}
 			else if( this.MessagesIndex != 0 ) {
-				Array.Resize<RequestOfReplyMessage.Message>( ref this.Request.messages , this.MessagesIndex + 1 );
+				Array.Resize( ref this.Request.messages , this.MessagesIndex + 1 );
 			}
 
-			RequestOfReplyMessage.Message.Template template = new RequestOfReplyMessage.Message.Template();
-			template.type = CommonEnum.TemplateType.buttons.ToString();
-			template.thumbnailImageUrl = thumbnailImageUrl;
-			template.title = title;
-			template.text = text;
-			template.actions = actions;
+			Template template = new Template() {
+				type = CommonEnum.TemplateType.buttons.ToString() ,
+				thumbnailImageUrl = thumbnailImageUrl ,
+				title = title ,
+				text = text ,
+				actions = actions
+			};
 
-			RequestOfReplyMessage.Message message = new RequestOfReplyMessage.Message();
-			message.type = CommonEnum.MessageType.template.ToString();
-			message.altText = altText;
-			message.template = template;
+			Message message = new Message() {
+				type = CommonEnum.MessageType.template.ToString() ,
+				altText = altText ,
+				template = template
+			};
 
 			this.Request.messages[ this.MessagesIndex ] = message;
 			this.MessagesIndex++;
@@ -427,7 +207,7 @@ namespace LineBotCompanyTrip.Services.LineBot {
 		public ReplyMessageService AddConfirmMessage(
 			string altText ,
 			string text ,
-			RequestOfReplyMessage.Message.Template.Action[] actions
+			Models.LineBot.ReplyMessage.Action[] actions
 		) {
 
 			if( this.MessagesIndex == this.MaxIndex ) {
@@ -438,15 +218,17 @@ namespace LineBotCompanyTrip.Services.LineBot {
 				Array.Resize( ref this.Request.messages , this.MessagesIndex + 1 );
 			}
 			
-			RequestOfReplyMessage.Message.Template template = new RequestOfReplyMessage.Message.Template();
-			template.type = CommonEnum.TemplateType.confirm.ToString();
-			template.text = text;
-			template.actions = actions;
+			Template template = new Template() {
+				type = CommonEnum.TemplateType.confirm.ToString() ,
+				text = text ,
+				actions = actions
+			};
 
-			RequestOfReplyMessage.Message message = new RequestOfReplyMessage.Message();
-			message.type = CommonEnum.MessageType.template.ToString();
-			message.altText = altText;
-			message.template = template;
+			Message message = new Message() {
+				type = CommonEnum.MessageType.template.ToString() ,
+				altText = altText ,
+				template = template
+			};
 			
 			this.Request.messages[ this.MessagesIndex ] = message;
 			this.MessagesIndex++;
@@ -466,7 +248,7 @@ namespace LineBotCompanyTrip.Services.LineBot {
 		/// <returns>自身のオブジェクト</returns>
 		public ReplyMessageService AddCarouselMessage(
 			string altText ,
-			RequestOfReplyMessage.Message.Template.Column[] columns
+			Column[] columns
 		) {
 
 			if( this.MessagesIndex == this.MaxIndex ) {
@@ -474,17 +256,19 @@ namespace LineBotCompanyTrip.Services.LineBot {
 				return this;
 			}
 			else if( this.MessagesIndex != 0 ) {
-				Array.Resize<RequestOfReplyMessage.Message>( ref this.Request.messages , this.MessagesIndex + 1 );
+				Array.Resize( ref this.Request.messages , this.MessagesIndex + 1 );
 			}
 
-			RequestOfReplyMessage.Message.Template template = new RequestOfReplyMessage.Message.Template();
-			template.type = CommonEnum.TemplateType.carousel.ToString();
-			template.columns = columns;
+			Template template = new Template() {
+				type = CommonEnum.TemplateType.carousel.ToString() ,
+				columns = columns
+			};
 
-			RequestOfReplyMessage.Message message = new RequestOfReplyMessage.Message();
-			message.type = CommonEnum.MessageType.template.ToString();
-			message.altText = altText;
-			message.template = template;
+			Message message = new Message() {
+				type = CommonEnum.MessageType.template.ToString() ,
+				altText = altText ,
+				template = template
+			};
 			
 			this.Request.messages[ this.MessagesIndex ] = message;
 			this.MessagesIndex++;
@@ -512,6 +296,7 @@ namespace LineBotCompanyTrip.Services.LineBot {
 				HttpResponseMessage response = await client.PostAsync( LineBotConfig.ReplyMessageUrl , content );
 				string result = await response.Content.ReadAsStringAsync();
 				Trace.TraceInformation( "Reply Message Status Code is : " + response.StatusCode );
+				response.Dispose();
 			}
 			catch( ArgumentNullException e ) {
 				Trace.TraceInformation( "Emotion API Argument Null Exception " + e.Message );
@@ -522,6 +307,9 @@ namespace LineBotCompanyTrip.Services.LineBot {
 			catch( Exception e ) {
 				Trace.TraceInformation( "予期せぬ例外 " + e.Message );
 			}
+
+			content.Dispose();
+			client.Dispose();
 
 		}
 		

@@ -8,15 +8,14 @@ using LineBotCompanyTrip.Services.LineBot;
 using LineBotCompanyTrip.Services.ProcessPicture;
 using LineBotCompanyTrip.Services.SavePicture;
 using Newtonsoft.Json.Linq;
-using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Drawing;
 using System.Net;
 using System.Net.Http;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Web.Http;
+using LineBotCompanyTrip.Services.SQLServer;
 
 namespace LineBotCompanyTrip.Controllers {
 
@@ -25,6 +24,11 @@ namespace LineBotCompanyTrip.Controllers {
 	/// </summary>
 	public class WebhookController : ApiController {
 
+		/// <summary>
+		/// SQLServerに関するサービス
+		/// </summary>
+		private SQLServerService sqlServiceServer;
+		
 		/// <summary>
 		/// POSTメソッド
 		/// </summary>
@@ -36,7 +40,7 @@ namespace LineBotCompanyTrip.Controllers {
 			Trace.TraceInformation( "Request Token is " + requestToken.ToString() );
 
 			//イベントの取得
-			RequestOfWebhook.Event firstEvent;
+			Event firstEvent;
 			{
 				RequestOfWebhook request = requestToken.ToObject<RequestOfWebhook>();
 				if( request?.events?[0] == null ) {
@@ -46,6 +50,8 @@ namespace LineBotCompanyTrip.Controllers {
 				firstEvent = request.events[ 0 ];
 			}
 			
+			this.sqlServiceServer = new SQLServerService();
+
 			//フォロー時イベント
 			if( CommonEnum.EventType.follow.ToString().Equals( firstEvent.type ) )
 				return await this.FollowEvent( firstEvent.replyToken , firstEvent.source.userId );
@@ -66,7 +72,7 @@ namespace LineBotCompanyTrip.Controllers {
 			else if( CommonEnum.EventType.message.ToString().Equals( firstEvent.type ) ) {
 
 				//メッセージオブジェクトの取得
-				RequestOfWebhook.Event.MessageObject message;
+				MessageObject message;
 				{
 					if( firstEvent.message == null ) {
 						Trace.TraceInformation( "request.events[0].messageが取得できませんでした" );
@@ -139,7 +145,8 @@ namespace LineBotCompanyTrip.Controllers {
 
 			Trace.TraceInformation( "フォローイベント通知" );
 
-			// TODO ユーザIDのDB登録
+			// ユーザIDのDB登録
+			this.sqlServiceServer.RegistLineInfo( userId , true );
 
 			//メッセージの通知
 			{
@@ -163,7 +170,8 @@ namespace LineBotCompanyTrip.Controllers {
 
 			Trace.TraceInformation( "グループ追加イベント通知" );
 
-			// TODO グループIDのDB登録
+			// グループIDのDB登録
+			this.sqlServiceServer.RegistLineInfo( groupId , false );
 
 			//メッセージの通知
 			{
@@ -186,7 +194,8 @@ namespace LineBotCompanyTrip.Controllers {
 
 			Trace.TraceInformation( "アンフォローイベント通知" );
 
-			// TODO ユーザIDからわかるDBレコード削除
+			// ユーザIDからわかるDBレコード削除
+			this.sqlServiceServer.LeaveLineInfo( userId , true );
 
 			return new HttpResponseMessage( HttpStatusCode.OK );
 
@@ -201,7 +210,8 @@ namespace LineBotCompanyTrip.Controllers {
 
 			Trace.TraceInformation( "グループ退出イベント通知" );
 
-			// TODO グループIDからわかるDBレコード削除
+			// グループIDからわかるDBレコード削除
+			this.sqlServiceServer.LeaveLineInfo( groupId , false );
 
 			return new HttpResponseMessage( HttpStatusCode.OK );
 
@@ -246,27 +256,38 @@ namespace LineBotCompanyTrip.Controllers {
 				responseOfEmotionAPI = await emotionService.Call( imageBytes );
 			}
 
-			// TODO Face APIの顔群とEmotionAPIの解析群の紐づけ
-			
 			//画像を加工
+			List<byte[]> processedImageBytesList = new List<byte[]>();
+			{
+				ProcessPictureService processPictureService = new ProcessPictureService();
+				foreach( ResponseOfEmotionAPI response in responseOfEmotionAPI ) {
 			byte[] processedImageBytes = new byte[ imageBytes.Length ];
 			imageBytes.CopyTo( processedImageBytes , 0 );
-			{
-				foreach( ResponseOfEmotionAPI response in responseOfEmotionAPI ) {
-					processedImageBytes = this.DrawAnalysis( processedImageBytes , response );
+					processedImageBytes = processPictureService.DrawAnalysis( processedImageBytes , response );
+					processedImageBytesList.Add( processedImageBytes );
 				}
 			}
 
 			//画像をサーバに保存
 			string originalUrl = null;
-			string processedUrl = null;
+			List<string> processedUrls = new List<string>();
 			{
 				SavePictureInAzureStorageService savePictureInAzureStorageService = new SavePictureInAzureStorageService();
 				originalUrl = savePictureInAzureStorageService.SaveImage( imageBytes , timestamp , true );
-				processedUrl = savePictureInAzureStorageService.SaveImage( processedImageBytes , timestamp , false );
+				for( int i = 0 ; i < processedImageBytesList.Count ; i++ ) {
+					processedUrls.Add( savePictureInAzureStorageService.SaveImage( processedImageBytesList[ i ] , timestamp , false , i ) );
+				}
 			}
 
-			// TODO DBに画像情報を登録
+			// TODO Face APIの顔群とEmotionAPIの解析群の紐づけ
+
+			int pictureId = this.sqlServiceServer.RegistPicture( userId , groupId , originalUrl );
+
+			// DBに画像情報を登録
+			for( int i = 0 ; i < responseOfEmotionAPI.Count ; i++ ) {
+				this.sqlServiceServer.RegistFace( pictureId , responseOfEmotionAPI[ i ] , processedUrls[ i ] );
+			}
+
 
 			//解析結果の通知
 			{
@@ -276,22 +297,30 @@ namespace LineBotCompanyTrip.Controllers {
 					ReplyMessageService replyMessageService = new ReplyMessageService( replyToken );
 					await replyMessageService
 					.AddTextMessage( "顔は検出できませんでした！\nいいお写真ですね！" )
-					.AddImageMessage( processedUrl , processedUrl )
 					.Send();
 					
 				}
 				else {
-
-					string sendText = "";
-					foreach( ResponseOfEmotionAPI resultOfEmotion in responseOfEmotionAPI ) {
-						sendText += this.GetAnalysis( resultOfEmotion ) + "\n\n";
-					}
-
+					ActionCreator actionCreator = new ActionCreator();
+					ColumnCreator columnCreator = new ColumnCreator();
 					ReplyMessageService replyMessageService = new ReplyMessageService( replyToken );
-					await replyMessageService
-					.AddTextMessage( sendText )
-					.AddImageMessage( processedUrl , processedUrl )
-					.Send();
+					columnCreator = columnCreator.CreateColumn();
+					for( int i = 0 ; i < processedUrls.Count ; i++ ) {
+
+						string[] resultText = GetAnalysis( responseOfEmotionAPI[ i ] ).Split( '\n' );
+
+						columnCreator = columnCreator
+							.AddColumn(
+								processedUrls[ i ] ,
+								resultText[ 0 ] ,
+								resultText[ 1 ] ,
+								actionCreator
+									.CreateAction( "carousel" )
+									.AddMessageAction( "いいね！" , "いいね" )
+									.GetActions()
+						);
+					}
+					await replyMessageService.AddCarouselMessage( "解析" , columnCreator.GetColumns() ).Send();
 
 				}
 				
@@ -302,168 +331,12 @@ namespace LineBotCompanyTrip.Controllers {
 		}
 
 		/// <summary>
-		/// 解析結果を画像のバイナリデータに描画する
-		/// </summary>
-		/// <param name="imageBytes">画像のバイナリデータ</param>
-		/// <param name="response">Emotion APIで取得した結果</param>
-		/// <returns>描画後画像のバイナリデータ</returns>
-		private byte[] DrawAnalysis( byte[] imageBytes , ResponseOfEmotionAPI response ) {
-
-			ProcessPictureService processPictureService = new ProcessPictureService();
-
-			CommonEnum.EmotionType type = CommonEnum.EmotionType.neutral;
-			double value = 0.0;
-			this.GetMostEmotion( response , ref type , ref value );
-
-			Pen penColor;
-			Brush brushColor;
-			string text;
-			switch( type ) {
-				case CommonEnum.EmotionType.happiness:
-					penColor = Pens.Pink;
-					brushColor = Brushes.Pink;
-					text = "Happy:" + CommonUtil.ConvertDecimalIntoPercentage( value );
-					break;
-				case CommonEnum.EmotionType.anger:
-					penColor = Pens.Red;
-					brushColor = Brushes.Red;
-					text = "Anger:" + CommonUtil.ConvertDecimalIntoPercentage( value );
-					break;
-				case CommonEnum.EmotionType.contempt:
-					penColor = Pens.Orange;
-					brushColor = Brushes.Orange;
-					text = "Contempt:" + CommonUtil.ConvertDecimalIntoPercentage( value );
-					break;
-				case CommonEnum.EmotionType.sadness:
-					penColor = Pens.Blue;
-					brushColor = Brushes.Blue;
-					text = "Sadness:" + CommonUtil.ConvertDecimalIntoPercentage( value );
-					break;
-				case CommonEnum.EmotionType.disgust:
-					penColor = Pens.Aqua;
-					brushColor = Brushes.Aqua;
-					text = "Disgust:" + CommonUtil.ConvertDecimalIntoPercentage( value );
-					break;
-				case CommonEnum.EmotionType.fear:
-					penColor = Pens.Yellow;
-					brushColor = Brushes.Yellow;
-					text = "Fear:" + CommonUtil.ConvertDecimalIntoPercentage( value );
-					break;
-				case CommonEnum.EmotionType.surprise:
-					penColor = Pens.Green;
-					brushColor = Brushes.Green;
-					text = "Surprise:" + CommonUtil.ConvertDecimalIntoPercentage( value );
-					break;
-				default:
-					penColor = Pens.Gray;
-					brushColor = Brushes.Gray;
-					text = "Neutral:" + CommonUtil.ConvertDecimalIntoPercentage( value );
-					break;
-			}
-			
-			imageBytes =  processPictureService.DrawFrame(
-				imageBytes ,
-				response.faceRectangle.left ,
-				response.faceRectangle.top ,
-				response.faceRectangle.width ,
-				response.faceRectangle.height ,
-				penColor
-			);
-
-			imageBytes = processPictureService.DrawMessage(
-				imageBytes ,
-				response.faceRectangle.left ,
-				response.faceRectangle.top ,
-				penColor ,
-				brushColor ,
-				text
-			);
-
-			return imageBytes;
-
-		}
-
-		/// <summary>
-		/// レスポンスから最も近い解析結果を返す
-		/// </summary>
-		/// <param name="response">レスポンス</param>
-		/// <param name="type">表情種別</param>
-		/// <param name="value">表情評価</param>
-		private void GetMostEmotion( ResponseOfEmotionAPI response , ref CommonEnum.EmotionType type , ref double value ) {
-
-			//幸せ度40%以上で幸せ認定
-			double happiness = Math.Truncate( response.scores.happiness * 10000 ) / 10000;
-			if( happiness > 0.4 ) {
-				type = CommonEnum.EmotionType.happiness;
-				value = happiness;
-				return;
-			}
-
-			//悲しみ度40%以上で幸せ認定
-			double sadness = Math.Truncate( response.scores.sadness * 10000 ) / 10000;
-			if( sadness > 0.4 ) {
-				type = CommonEnum.EmotionType.sadness;
-				value = sadness;
-				return;
-			}
-
-			//ビビり度40%以上で幸せ認定
-			double fear = Math.Truncate( response.scores.fear * 10000 ) / 10000;
-			if( fear > 0.4 ) {
-				type = CommonEnum.EmotionType.fear;
-				value = fear;
-				return;
-			}
-
-			//怒り度40%以上で幸せ認定
-			double anger = Math.Truncate( response.scores.anger * 10000 ) / 10000;
-			if( anger > 0.4 ) {
-				type = CommonEnum.EmotionType.anger;
-				value = anger;
-				return;
-			}
-
-			//軽蔑度40%以上で幸せ認定
-			double contempt = Math.Truncate( response.scores.contempt * 10000 ) / 10000;
-			if( contempt > 0.4 ) {
-				type = CommonEnum.EmotionType.contempt;
-				value = contempt;
-				return;
-			}
-
-			//うんざり度40%以上で幸せ認定
-			double disgust = Math.Truncate( response.scores.disgust * 10000 ) / 10000;
-			if( disgust > 0.4 ) {
-				type = CommonEnum.EmotionType.disgust;
-				value = disgust;
-				return;
-			}
-
-			//驚き度40%以上で幸せ認定
-			double surprise = Math.Truncate( response.scores.surprise * 10000 ) / 10000;
-			if( surprise > 0.4 ) {
-				type = CommonEnum.EmotionType.surprise;
-				value = surprise;
-				return;
-			}
-
-			//どれも40%超えてなかった場合は真顔認定
-			double neutral = Math.Truncate( response.scores.neutral * 10000 ) / 10000;
-			type = CommonEnum.EmotionType.neutral;
-			value = neutral;
-
-		}
-
-		/// <summary>
 		/// 解析結果を返す
 		/// </summary>
-		/// <param name="resultOfEmotion">Emotion APIの結果</param>
-		/// <returns>解析結果</returns>
-		private string GetAnalysis( ResponseOfEmotionAPI resultOfEmotion ) {
-
-			CommonEnum.EmotionType type = CommonEnum.EmotionType.neutral;
-			double value = 0.0;
-			this.GetMostEmotion( resultOfEmotion , ref type , ref value );
+		/// <param name="type">表情タイプ</param>
+		/// <param name="value">表情値</param>
+		/// <returns></returns>
+		private string GetAnalysis( CommonEnum.EmotionType type , double value ) {
 
 			string text;
 			switch( type ) {
@@ -515,6 +388,21 @@ namespace LineBotCompanyTrip.Controllers {
 		}
 
 		/// <summary>
+		/// 解析結果を返す
+		/// </summary>
+		/// <param name="resultOfEmotion">Emotion APIの結果</param>
+		/// <returns>解析結果</returns>
+		private string GetAnalysis( ResponseOfEmotionAPI resultOfEmotion ) {
+
+			CommonEnum.EmotionType type = CommonEnum.EmotionType.neutral;
+			double value = 0.0;
+			CommonUtil.GetMostEmotion( resultOfEmotion , ref type , ref value );
+
+			return GetAnalysis( type , value );
+			
+		}
+
+		/// <summary>
 		/// 「集計して」メッセージ送信時イベント
 		/// </summary>
 		/// <param name="replyToken">リプライトークン</param>
@@ -529,23 +417,24 @@ namespace LineBotCompanyTrip.Controllers {
 
 			Trace.TraceInformation( "メッセージイベント通知－集計" );
 
-			// TODO DBよりpostbackステータス更新
+			// DBよりpostbackステータス更新
+			this.sqlServiceServer.UpdatePostback( userId , groupId , true );
 
 			//テンプレートメッセージ通知
 			{
-				ReplyMessageService.ActionCreator actionCreator = new ReplyMessageService.ActionCreator();
+				ActionCreator actionCreator = new ActionCreator();
 				ReplyMessageService replyMessageService = new ReplyMessageService( replyToken );
 				await replyMessageService
 				.AddTextMessage( "今まで送られてきた画像を集計するよ" )
 				.AddButtonsMessage(
 					"ランキング" ,
-					"https://manuke.jp/wp-content/uploads/2016/05/chomado2.jpg" ,
+					"https://linebotcompanytrip.blob.core.windows.net/pictures/original_1495938362818.jpeg" ,
 					"ランキング" ,
 					"下のボタンを押すとそれぞれのランキングが表示されるよ" ,
 					actionCreator
 					.CreateAction( "buttons" )
 					.AddPostbackAction(
-						"たくさん写真撮られた人ランキング" ,
+						"よく写った人ランキング" ,
 						CommonEnum.PostbackEvent.count.ToString() ,
 						"誰がたくさん撮られたの？"
 					)
@@ -583,22 +472,69 @@ namespace LineBotCompanyTrip.Controllers {
 
 			Trace.TraceInformation( "Postbackイベント通知－よく写真に撮られる人ランキング" );
 
-			// TODO postbackステータス更新
+			// 初期化状態でないなら何もしない
+			if( !this.sqlServiceServer.IsPostbackInitialization( userId , groupId ) ) {
+				Trace.TraceInformation( "アクション初期化がされていない" );
+				return new HttpResponseMessage( HttpStatusCode.OK );
+			}
 
-			// TODO DBより画像を3枚取得
-			string url1 = "https://manuke.jp/wp-content/uploads/2016/05/chomado2.jpg";
-			string url2 = "https://manuke.jp/wp-content/uploads/2016/05/chomado2.jpg";
-			string url3 = "https://manuke.jp/wp-content/uploads/2016/05/chomado2.jpg";
+			// postbackステータス更新
+			this.sqlServiceServer.UpdatePostback( userId , groupId , false );
+			
+			// DBより画像を3枚取得
+			string url1 = "";
+			string url2 = "";
+			string url3 = "";
+
+			// 撮られた回数
+			int count1 = 0;
+			int count2 = 0;
+			int count3 = 0;
+
+			this.sqlServiceServer.GetMostPhotographed( userId , groupId , ref url1 , ref count1 , ref url2 , ref count2 , ref url3 , ref count3 );
 
 			//解析結果の通知
 			{
 
+				ColumnCreator columnCreator = new ColumnCreator();
+				ActionCreator actionCreator = new ActionCreator();
+
 				ReplyMessageService replyMessageService = new ReplyMessageService( replyToken );
 				await replyMessageService
 				.AddTextMessage( "よく写真に写ってた方は以下のお三方です！" )
-				.AddImageMessage( url1 , url1 )
-				.AddImageMessage( url2 , url2 )
-				.AddImageMessage( url3 , url3 )
+				.AddCarouselMessage(
+					"よく写る人ランキング" ,
+					columnCreator
+						.CreateColumn()
+						.AddColumn( 
+							url1 , 
+							"1位" , 
+							count1 + "回" , 
+							actionCreator
+								.CreateAction( CommonEnum.TemplateType.carousel.ToString() )
+								.AddMessageAction( "すごい！" , "すごい！！" )
+								.GetActions()
+						)
+						.AddColumn( 
+							url2 , 
+							"2位" , 
+							count2 + "回" ,
+							actionCreator
+								.CreateAction( CommonEnum.TemplateType.carousel.ToString() )
+								.AddMessageAction( "いいね！" , "いいね！！" )
+								.GetActions()
+						)
+						.AddColumn( 
+							url3 , 
+							"3位" , 
+							count3 + "回" ,
+							actionCreator
+								.CreateAction( CommonEnum.TemplateType.carousel.ToString() )
+								.AddMessageAction( "やったね！" , "やったね！！" )
+								.GetActions()
+						)
+						.GetColumns()
+					)
 				.AddTextMessage( "たっくさん撮られましたね！" )
 				.Send();
 
@@ -623,22 +559,72 @@ namespace LineBotCompanyTrip.Controllers {
 
 			Trace.TraceInformation( "Postbackイベント通知－笑顔ランキング" );
 
-			// TODO postbackステータス更新
+			// 初期化状態でないなら何もしない
+			if( !this.sqlServiceServer.IsPostbackInitialization( userId , groupId ) ) {
+				Trace.TraceInformation( "アクション初期化がされていない" );
+				return new HttpResponseMessage( HttpStatusCode.OK );
+			}
 
-			// TODO DBより画像を3枚取得
-			string url1 = "https://manuke.jp/wp-content/uploads/2016/05/chomado2.jpg";
-			string url2 = "https://manuke.jp/wp-content/uploads/2016/05/chomado2.jpg";
-			string url3 = "https://manuke.jp/wp-content/uploads/2016/05/chomado2.jpg";
+			// postbackステータス更新
+			this.sqlServiceServer.UpdatePostback( userId , groupId , false );
+
+			// DBより画像を3枚取得
+			string url1 = "";
+			string url2 = "";
+			string url3 = "";
+
+			double value1 = 0.0;
+			double value2 = 0.0;
+			double value3 = 0.0;
+
+			this.sqlServiceServer.GetMostHappiness( userId , groupId , ref url1 , ref value1 , ref url2 , ref value2 , ref url3 , ref value3 );
 
 			//解析結果の通知
 			{
 
+				string result1 = CommonUtil.ConvertDecimalIntoPercentage( value1 );
+				string result2 = CommonUtil.ConvertDecimalIntoPercentage( value2 );
+				string result3 = CommonUtil.ConvertDecimalIntoPercentage( value3 );
+
+				ColumnCreator columnCreator = new ColumnCreator();
+				ActionCreator actionCreator = new ActionCreator();
+
 				ReplyMessageService replyMessageService = new ReplyMessageService( replyToken );
 				await replyMessageService
 				.AddTextMessage( "笑顔の眩しい方は以下のお三方です！" )
-				.AddImageMessage( url1 , url1 )
-				.AddImageMessage( url2 , url2 )
-				.AddImageMessage( url3 , url3 )
+				.AddCarouselMessage(
+					"笑顔ランキング" ,
+					columnCreator
+						.CreateColumn()
+						.AddColumn(
+							url1 ,
+							"1位" ,
+							"笑顔度：" + result1 ,
+							actionCreator
+								.CreateAction( CommonEnum.TemplateType.carousel.ToString() )
+								.AddMessageAction( "すごい！" , "すごい！！" )
+								.GetActions()
+						)
+						.AddColumn(
+							url2 ,
+							"2位" ,
+							"笑顔度：" + result2 ,
+							actionCreator
+								.CreateAction( CommonEnum.TemplateType.carousel.ToString() )
+								.AddMessageAction( "いいね！" , "いいね！！" )
+								.GetActions()
+						)
+						.AddColumn(
+							url3 ,
+							"3位" ,
+							"笑顔度:" + result3 ,
+							actionCreator
+								.CreateAction( CommonEnum.TemplateType.carousel.ToString() )
+								.AddMessageAction( "やったね！" , "やったね！！" )
+								.GetActions()
+						)
+						.GetColumns()
+				)
 				.AddTextMessage( "(⌒-⌒)ﾆｺﾆｺ" )
 				.Send();
 
@@ -663,23 +649,72 @@ namespace LineBotCompanyTrip.Controllers {
 
 			Trace.TraceInformation( "Postbackイベント通知－表情豊かランキング" );
 
-			// TODO postbackステータス更新
+			// 初期化状態でないなら何もしない
+			if( !this.sqlServiceServer.IsPostbackInitialization( userId , groupId ) ) {
+				Trace.TraceInformation( "アクション初期化がされていない" );
+				return new HttpResponseMessage( HttpStatusCode.OK );
+			}
 
-			// TODO DBより画像を3枚取得
-			string url1 = "https://manuke.jp/wp-content/uploads/2016/05/chomado2.jpg";
-			string url2 = "https://manuke.jp/wp-content/uploads/2016/05/chomado2.jpg";
-			string url3 = "https://manuke.jp/wp-content/uploads/2016/05/chomado2.jpg";
+			// postbackステータス更新
+			this.sqlServiceServer.UpdatePostback( userId , groupId , false );
+
+			// DBより画像を3枚取得
+			string url1 = "";
+			string url2 = "";
+			string url3 = "";
+
+			CommonEnum.EmotionType type1 = CommonEnum.EmotionType.neutral;
+			CommonEnum.EmotionType type2 = CommonEnum.EmotionType.neutral;
+			CommonEnum.EmotionType type3 = CommonEnum.EmotionType.neutral;
+
+			double value1 = 0.0;
+			double value2 = 0.0;
+			double value3 = 0.0;
+
+			this.sqlServiceServer.GetMostEmotion( userId , groupId , ref url1 , ref type1 , ref value1 , ref url2 , ref type2 , ref value2 , ref url3 , ref type3 , ref value3 );
 
 			//解析結果の通知
 			{
 
+				ColumnCreator columnCreator = new ColumnCreator();
+				ActionCreator actionCreator = new ActionCreator();
+
 				ReplyMessageService replyMessageService = new ReplyMessageService( replyToken );
 				await replyMessageService
 				.AddTextMessage( "笑顔に限らず、表情豊かな方は以下のお三方です！" )
-				.AddImageMessage( url1 , url1 )
-				.AddImageMessage( url2 , url2 )
-				.AddImageMessage( url3 , url3 )
-				.AddTextMessage( "Σd(ﾟдﾟ*)ｸﾞｯｼﾞｮﾌﾞ" )
+				.AddCarouselMessage(
+					"表情豊かランキング" ,
+					columnCreator
+						.CreateColumn()
+						.AddColumn(
+							url1 ,
+							"1位" ,
+							GetAnalysis( type1 , value1 ) ,
+							actionCreator
+								.CreateAction( CommonEnum.TemplateType.carousel.ToString() )
+								.AddMessageAction( "すごい！" , "すごい！！" )
+								.GetActions()
+						)
+						.AddColumn(
+							url2 ,
+							"2位" ,
+							GetAnalysis( type2 , value2 ) ,
+							actionCreator
+								.CreateAction( CommonEnum.TemplateType.carousel.ToString() )
+								.AddMessageAction( "いいね！" , "いいね！！" )
+								.GetActions()
+						)
+						.AddColumn(
+							url3 ,
+							"3位" ,
+							GetAnalysis( type3 , value3 ) ,
+							actionCreator
+								.CreateAction( CommonEnum.TemplateType.carousel.ToString() )
+								.AddMessageAction( "やったね！" , "やったね！！" )
+								.GetActions()
+						)
+						.GetColumns()
+				).AddTextMessage( "Σd(ﾟдﾟ*)ｸﾞｯｼﾞｮﾌﾞ" )
 				.Send();
 
 			}

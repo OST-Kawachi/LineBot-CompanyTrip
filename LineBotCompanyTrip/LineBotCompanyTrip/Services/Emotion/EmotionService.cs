@@ -8,6 +8,7 @@ using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading.Tasks;
+using LineBotCompanyTrip.Common;
 
 namespace LineBotCompanyTrip.Services.Emotion {
 
@@ -23,7 +24,8 @@ namespace LineBotCompanyTrip.Services.Emotion {
 		/// <returns>APIレスポンス</returns>
 		public async Task<List<ResponseOfEmotionAPI>> Call( byte[] binaryImage ) {
 			
-			StreamContent content = new StreamContent( new MemoryStream( binaryImage ) );
+			MemoryStream bynaryStream = new MemoryStream( binaryImage );
+			StreamContent content = new StreamContent( bynaryStream );
 			content.Headers.ContentType = new MediaTypeHeaderValue( "application/octet-stream" );
 			
 			HttpClient client = new HttpClient();
@@ -35,19 +37,32 @@ namespace LineBotCompanyTrip.Services.Emotion {
 				HttpResponseMessage response = await client.PostAsync( EmotionConfig.EmotionApiUrl , content );
 				string resultAsString = await response.Content.ReadAsStringAsync();
 				Trace.TraceInformation( "Emotion API Result is : " + resultAsString );
+				bynaryStream.Dispose();
+				response.Dispose();
+				content.Dispose();
+				client.Dispose();
 				return JsonConvert.DeserializeObject<List<ResponseOfEmotionAPI>>( resultAsString );
 
 			}
 			catch( ArgumentNullException e ) {
 				Trace.TraceInformation( "Emotion API Argument Null Exception " + e.Message );
+				bynaryStream.Dispose();
+				content.Dispose();
+				client.Dispose();
 				return null;
 			}
 			catch( HttpRequestException e ) {
 				Trace.TraceInformation( "Emotion API Http Request Exception " + e.Message );
+				bynaryStream.Dispose();
+				content.Dispose();
+				client.Dispose();
 				return null;
 			}
 			catch( Exception e ) {
 				Trace.TraceInformation( "予期せぬ例外 " + e.Message );
+				bynaryStream.Dispose();
+				content.Dispose();
+				client.Dispose();
 				return null;
 			}
 			
