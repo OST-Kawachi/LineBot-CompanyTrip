@@ -2,7 +2,6 @@
 using Microsoft.WindowsAzure.Storage;
 using Microsoft.WindowsAzure.Storage.Auth;
 using Microsoft.WindowsAzure.Storage.Blob;
-using System;
 using System.Diagnostics;
 using System.IO;
 
@@ -40,20 +39,22 @@ namespace LineBotCompanyTrip.Services.SavePicture {
 			CloudBlobClient cloudBlobClient = cloudStorageAccount.CreateCloudBlobClient();
 			this.cloudBlobContainer = cloudBlobClient.GetContainerReference( SavePictureInAzureStorageService.ContainerName );
 
-			Trace.TraceInformation( "Azure Storage と接続開始" );
+			Trace.TraceInformation( "Azure Storage Connection Start" );
 
 		}
 
 		/// <summary>
 		/// 画像を保存する
 		/// </summary>
-		/// <param name="imageBytes">画像のバイナリデータ</param>
+		/// <param name="pictureBytes">画像のバイナリデータ</param>
 		/// <param name="timestamp">Webhook受信日時</param>
 		/// <param name="isOriginal">オリジナル画像かどうか</param>
 		/// <returns>URL</returns>
-		public string SaveImage( byte[] imageBytes , string timestamp , bool isOriginal , int processedIndex = -1 ) {
+		public string StorePicture( byte[] pictureBytes , string timestamp , bool isOriginal , int processedIndex = -1 ) {
 
-			MemoryStream imageStream = new MemoryStream( imageBytes );
+			Trace.TraceInformation( "Store In Azure Storage Start" );
+
+			MemoryStream pictureStream = new MemoryStream( pictureBytes );
 			
 			string pictureName = 
 				( isOriginal ? "original_" : "processed_" ) +
@@ -64,7 +65,7 @@ namespace LineBotCompanyTrip.Services.SavePicture {
 			Trace.TraceInformation( "Picture Name is : " + pictureName );
 			
 			CloudBlockBlob cloudBlockBlob = this.cloudBlobContainer.GetBlockBlobReference( pictureName );
-			cloudBlockBlob.UploadFromStream( imageStream );
+			cloudBlockBlob.UploadFromStream( pictureStream );
 
 			Trace.TraceInformation( "Picture Upload In Azure Storage : SUCCESS" );
 
@@ -74,9 +75,9 @@ namespace LineBotCompanyTrip.Services.SavePicture {
 				"/" +
 				pictureName;
 
-			Trace.TraceInformation( "Picture Path is : " + imagePath );
+			Trace.TraceInformation( "Picture Full Path is : " + imagePath );
 
-			imageStream.Dispose();
+			pictureStream.Dispose();
 
 			return imagePath;
 

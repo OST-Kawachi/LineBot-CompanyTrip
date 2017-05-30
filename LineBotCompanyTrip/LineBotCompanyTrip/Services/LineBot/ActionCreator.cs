@@ -1,5 +1,6 @@
 ﻿using LineBotCompanyTrip.Common;
 using System;
+using System.Diagnostics;
 
 namespace LineBotCompanyTrip.Services.LineBot {
 
@@ -30,6 +31,9 @@ namespace LineBotCompanyTrip.Services.LineBot {
 		/// <returns>自身のオブジェクト</returns>
 		public ActionCreator CreateAction( string templateType ) {
 
+			Trace.TraceInformation( "CreateAction" );
+			Trace.TraceInformation( "Template Type is : " + templateType );
+
 			this.actions = new Models.LineBot.ReplyMessage.Action[ 1 ];
 
 			if( CommonEnum.TemplateType.buttons.ToString().Equals( templateType ) ) {
@@ -43,6 +47,8 @@ namespace LineBotCompanyTrip.Services.LineBot {
 			}
 
 			this.ActionsIndex = 0;
+
+			Trace.TraceInformation( "Max Action Index is : " + this.MaxIndex );
 
 			return this;
 
@@ -59,12 +65,17 @@ namespace LineBotCompanyTrip.Services.LineBot {
 		/// <returns>自身のオブジェクト</returns>
 		public ActionCreator AddPostbackAction( string label , string data , string text ) {
 
+			Trace.TraceInformation( "Add PostBack Action" );
+
 			if( this.ActionsIndex == this.MaxIndex ) {
+				Trace.TraceWarning( "Action Index == Max Index" );
 				return this;
 			}
 			else if( this.ActionsIndex != 0 ) {
 				Array.Resize( ref this.actions , this.ActionsIndex + 1 );
 			}
+
+			Trace.TraceInformation( "Actions Size is : " + this.actions.Length );
 
 			Models.LineBot.ReplyMessage.Action action = new Models.LineBot.ReplyMessage.Action() {
 				type = CommonEnum.ActionType.postback.ToString() ,
@@ -72,6 +83,11 @@ namespace LineBotCompanyTrip.Services.LineBot {
 				data = data ,
 				text = text
 			};
+
+			Trace.TraceInformation( "Action Type is : " + action.type );
+			Trace.TraceInformation( "Action Label is : " + action.label );
+			Trace.TraceInformation( "Action Data is : " + action.data );
+			Trace.TraceInformation( "Action Text is : " + action.text );
 
 			this.actions[ this.ActionsIndex ] = action;
 			this.ActionsIndex++;
@@ -89,18 +105,27 @@ namespace LineBotCompanyTrip.Services.LineBot {
 		/// <returns>自身のオブジェクト</returns>
 		public ActionCreator AddMessageAction( string label , string text ) {
 
+			Trace.TraceInformation( "Add Message Action" );
+
 			if( this.ActionsIndex == this.MaxIndex ) {
+				Trace.TraceWarning( "Action Index == Max Index" );
 				return this;
 			}
 			else if( this.ActionsIndex != 0 ) {
 				Array.Resize( ref this.actions , this.ActionsIndex + 1 );
 			}
 
+			Trace.TraceInformation( "Actions Size is : " + this.actions.Length );
+
 			Models.LineBot.ReplyMessage.Action action = new Models.LineBot.ReplyMessage.Action() {
 				type = CommonEnum.ActionType.message.ToString() ,
 				label = label ,
 				text = text
 			};
+
+			Trace.TraceInformation( "Action Type is : " + action.type );
+			Trace.TraceInformation( "Action Label is : " + action.label );
+			Trace.TraceInformation( "Action Text is : " + action.text );
 
 			this.actions[ this.ActionsIndex ] = action;
 			this.ActionsIndex++;
@@ -117,13 +142,18 @@ namespace LineBotCompanyTrip.Services.LineBot {
 		/// <param name="uri">URI</param>
 		/// <returns>自身のオブジェクト</returns>
 		public ActionCreator AddUriAction( string label , string uri ) {
+			
+			Trace.TraceInformation( "Add Uri Action" );
 
 			if( this.ActionsIndex == this.MaxIndex ) {
+				Trace.TraceWarning( "Action Index == Max Index" );
 				return this;
 			}
 			else if( this.ActionsIndex != 0 ) {
 				Array.Resize( ref this.actions , this.ActionsIndex + 1 );
 			}
+
+			Trace.TraceInformation( "Actions Size is : " + this.actions.Length );
 
 			Models.LineBot.ReplyMessage.Action action = new Models.LineBot.ReplyMessage.Action() {
 				type = CommonEnum.ActionType.uri.ToString() ,
@@ -131,6 +161,10 @@ namespace LineBotCompanyTrip.Services.LineBot {
 				uri = uri
 			};
 
+			Trace.TraceInformation( "Action Type is : " + action.type );
+			Trace.TraceInformation( "Action Label is : " + action.label );
+			Trace.TraceInformation( "Action Url is : " + action.uri );
+			
 			this.actions[ this.ActionsIndex ] = action;
 			this.ActionsIndex++;
 

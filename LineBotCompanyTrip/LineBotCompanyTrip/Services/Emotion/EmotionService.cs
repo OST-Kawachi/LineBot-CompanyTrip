@@ -8,7 +8,6 @@ using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading.Tasks;
-using LineBotCompanyTrip.Common;
 
 namespace LineBotCompanyTrip.Services.Emotion {
 
@@ -18,11 +17,13 @@ namespace LineBotCompanyTrip.Services.Emotion {
 	public class EmotionService {
 
 		/// <summary>
-		/// Emotion APIを呼び出す
+		/// Emotion API - Recognitionを呼び出す
 		/// </summary>
 		/// <param name="binaryImage">画像のバイナリデータ</param>
 		/// <returns>APIレスポンス</returns>
-		public async Task<List<ResponseOfEmotionAPI>> Call( byte[] binaryImage ) {
+		public async Task<List<ResponseOfEmotionRecognitionAPI>> CallRecognition( byte[] binaryImage ) {
+
+			Trace.TraceInformation( "Call Emotion API - Recognition Start" );
 			
 			MemoryStream bynaryStream = new MemoryStream( binaryImage );
 			StreamContent content = new StreamContent( bynaryStream );
@@ -36,33 +37,37 @@ namespace LineBotCompanyTrip.Services.Emotion {
 
 				HttpResponseMessage response = await client.PostAsync( EmotionConfig.EmotionApiUrl , content );
 				string resultAsString = await response.Content.ReadAsStringAsync();
-				Trace.TraceInformation( "Emotion API Result is : " + resultAsString );
+				Trace.TraceInformation( "Emotion API - Recognition Result is : " + resultAsString );
 				bynaryStream.Dispose();
 				response.Dispose();
 				content.Dispose();
 				client.Dispose();
-				return JsonConvert.DeserializeObject<List<ResponseOfEmotionAPI>>( resultAsString );
+				Trace.TraceInformation( "Call Emotion API - Recognition End" );
+				return JsonConvert.DeserializeObject<List<ResponseOfEmotionRecognitionAPI>>( resultAsString );
 
 			}
 			catch( ArgumentNullException e ) {
-				Trace.TraceInformation( "Emotion API Argument Null Exception " + e.Message );
+				Trace.TraceError( "Emotion API - Recognition Argument Null Exception " + e.Message );
 				bynaryStream.Dispose();
 				content.Dispose();
 				client.Dispose();
+				Trace.TraceInformation( "Call Emotion API - Recognition End" );
 				return null;
 			}
 			catch( HttpRequestException e ) {
-				Trace.TraceInformation( "Emotion API Http Request Exception " + e.Message );
+				Trace.TraceError( "Emotion API - Recognition Http Request Exception " + e.Message );
 				bynaryStream.Dispose();
 				content.Dispose();
 				client.Dispose();
+				Trace.TraceInformation( "Call Emotion API - Recognition End" );
 				return null;
 			}
 			catch( Exception e ) {
-				Trace.TraceInformation( "予期せぬ例外 " + e.Message );
+				Trace.TraceError( "Emotion API - Recognition 予期せぬ例外 " + e.Message );
 				bynaryStream.Dispose();
 				content.Dispose();
 				client.Dispose();
+				Trace.TraceInformation( "Call Emotion API - Recognition End" );
 				return null;
 			}
 			

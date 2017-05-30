@@ -1,5 +1,6 @@
 ﻿using LineBotCompanyTrip.Models.LineBot.ReplyMessage;
 using System;
+using System.Diagnostics;
 
 namespace LineBotCompanyTrip.Services.LineBot {
 
@@ -28,10 +29,14 @@ namespace LineBotCompanyTrip.Services.LineBot {
 		/// </summary>
 		/// <returns>自身のオブジェクト</returns>
 		public ColumnCreator CreateColumn() {
+			
+			Trace.TraceInformation( "CreateColumn" );
 
 			this.columns = new Column[ 1 ];
 			this.MaxIndex = 5;
 			this.ColumnIndex = 0;
+			
+			Trace.TraceInformation( "Max Column Index is : " + this.MaxIndex );
 
 			return this;
 
@@ -53,12 +58,17 @@ namespace LineBotCompanyTrip.Services.LineBot {
 			Models.LineBot.ReplyMessage.Action[] actions
 		) {
 
+			Trace.TraceInformation( "Add Column" );
+
 			if( this.ColumnIndex == this.MaxIndex ) {
+				Trace.TraceWarning( "Column Index == Max Index" );
 				return this;
 			}
 			else if( this.ColumnIndex != 0 ) {
 				Array.Resize( ref this.columns , this.ColumnIndex + 1 );
 			}
+			
+			Trace.TraceInformation( "Actions Size is : " + this.columns.Length );
 
 			Column column = new Column() {
 				thumbnailImageUrl = thumbnailImageUrl ,
@@ -66,6 +76,11 @@ namespace LineBotCompanyTrip.Services.LineBot {
 				text = text ,
 				actions = actions
 			};
+			
+			Trace.TraceInformation( "Column Thumbnail Image Url is : " + column.thumbnailImageUrl );
+			Trace.TraceInformation( "Column Title is : " + column.title );
+			Trace.TraceInformation( "Column Text is : " + column.text );
+			Trace.TraceInformation( "Column Actions Length is : " + column.actions.Length );
 
 			this.columns[ this.ColumnIndex ] = column;
 			this.ColumnIndex++;
