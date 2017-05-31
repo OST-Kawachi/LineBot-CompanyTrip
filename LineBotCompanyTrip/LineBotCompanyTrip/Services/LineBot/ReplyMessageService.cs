@@ -36,6 +36,9 @@ namespace LineBotCompanyTrip.Services.LineBot {
 		/// </summary>
 		/// <param name="replyToken">リプライトークン</param>
 		public ReplyMessageService( string replyToken ) {
+
+			Trace.TraceInformation( "Reply Message Service Start" );
+			Trace.TraceInformation( "Reply Token is : " + replyToken );
 			
 			this.Request = new RequestOfReplyMessage() {
 				replyToken = replyToken ,
@@ -54,19 +57,26 @@ namespace LineBotCompanyTrip.Services.LineBot {
 		/// <returns>自身のオブジェクト</returns>
 		public ReplyMessageService AddTextMessage( string messageText ) {
 
+			Trace.TraceInformation( "Add Text Message" );
+
 			if( this.MessagesIndex == this.MaxIndex ) {
-				Trace.TraceInformation( this.MaxIndex + "通以上送信できません" );
+				Trace.TraceWarning( "Message Index == Max Index" );
 				return this;
 			}
 			else if( this.MessagesIndex != 0 ) {
 				Array.Resize( ref this.Request.messages , this.MessagesIndex + 1 );
 			}
 
+			Trace.TraceInformation( "Messages Size is : " + this.Request.messages.Length );
+
 			Message message = new Message() {
 				type = CommonEnum.MessageType.text.ToString() ,
 				text = messageText
 			};
 
+			Trace.TraceInformation( "Message Type is : " + message.type );
+			Trace.TraceInformation( "Message Text is : " + message.text );
+			
 			this.Request.messages[ this.MessagesIndex ] = message;
 			this.MessagesIndex++;
 
@@ -84,19 +94,27 @@ namespace LineBotCompanyTrip.Services.LineBot {
 		/// <returns>自身のオブジェクト</returns>
 		public ReplyMessageService AddImageMessage( string originalContentUrl , string previewImageUrl ) {
 
+			Trace.TraceInformation( "Add Image Message" );
+
 			if( this.MessagesIndex == this.MaxIndex ) {
-				Trace.TraceInformation( this.MaxIndex + "通以上送信できません" );
+				Trace.TraceWarning( "Message Index == Max Index" );
 				return this;
 			}
 			else if( this.MessagesIndex != 0 ) {
 				Array.Resize( ref this.Request.messages , this.MessagesIndex + 1 );
 			}
 
+			Trace.TraceInformation( "Messages Size is : " + this.Request.messages.Length );
+
 			Message message = new Message() {
 				type = CommonEnum.MessageType.image.ToString() ,
 				originalContentUrl = originalContentUrl ,
 				previewImageUrl = previewImageUrl
 			};
+			
+			Trace.TraceInformation( "Message Type is : " + message.type );
+			Trace.TraceInformation( "Message Original Content Url is : " + message.originalContentUrl );
+			Trace.TraceInformation( "Message Preview Content Url is : " + message.previewImageUrl );
 
 			this.Request.messages[ this.MessagesIndex ] = message;
 			this.MessagesIndex++;
@@ -122,13 +140,17 @@ namespace LineBotCompanyTrip.Services.LineBot {
 			double longitude 
 		) {
 
+			Trace.TraceInformation( "Add Location Message" );
+
 			if( this.MessagesIndex == this.MaxIndex ) {
-				Trace.TraceInformation( this.MaxIndex + "通以上送信できません" );
+				Trace.TraceWarning( "Message Index == Max Index" );
 				return this;
 			}
 			else if( this.MessagesIndex != 0 ) {
 				Array.Resize( ref this.Request.messages , this.MessagesIndex + 1 );
 			}
+			
+			Trace.TraceInformation( "Messages Size is : " + this.Request.messages.Length );
 
 			Message message = new Message() {
 				type = CommonEnum.MessageType.location.ToString() ,
@@ -137,6 +159,12 @@ namespace LineBotCompanyTrip.Services.LineBot {
 				latitude = latitude ,
 				longitude = longitude
 			};
+
+			Trace.TraceInformation( "Message Type is : " + message.type );
+			Trace.TraceInformation( "Message Title is : " + message.title );
+			Trace.TraceInformation( "Message Address is : " + message.address );
+			Trace.TraceInformation( "Message Latitude is : " + message.latitude );
+			Trace.TraceInformation( "Message Longitude is : " + message.longitude );
 
 			this.Request.messages[ this.MessagesIndex ] = message;
 			this.MessagesIndex++;
@@ -164,14 +192,18 @@ namespace LineBotCompanyTrip.Services.LineBot {
 			string text ,
 			Models.LineBot.ReplyMessage.Action[] actions 
 		) {
+			
+			Trace.TraceInformation( "Add Button Message" );
 
 			if( this.MessagesIndex == this.MaxIndex ) {
-				Trace.TraceInformation( this.MaxIndex + "通以上送信できません" );
+				Trace.TraceWarning( "Message Index == Max Index" );
 				return this;
 			}
 			else if( this.MessagesIndex != 0 ) {
 				Array.Resize( ref this.Request.messages , this.MessagesIndex + 1 );
 			}
+
+			Trace.TraceInformation( "Messages Size is : " + this.Request.messages.Length );
 
 			Template template = new Template() {
 				type = CommonEnum.TemplateType.buttons.ToString() ,
@@ -180,12 +212,20 @@ namespace LineBotCompanyTrip.Services.LineBot {
 				text = text ,
 				actions = actions
 			};
-
+			
 			Message message = new Message() {
 				type = CommonEnum.MessageType.template.ToString() ,
 				altText = altText ,
 				template = template
 			};
+			
+			Trace.TraceInformation( "Message Type is : " + message.type );
+			Trace.TraceInformation( "Message Alt Text is : " + message.altText );
+			Trace.TraceInformation( "Message Template Type is : " + message.template.type );
+			Trace.TraceInformation( "Message Template Thumbnail Image Url is : " + message.template.thumbnailImageUrl );
+			Trace.TraceInformation( "Message Template Title is : " + message.template.title );
+			Trace.TraceInformation( "Message Template Text is : " + message.template.text );
+			Trace.TraceInformation( "Message Template Actions Length is : " + message.template.actions.Length );
 
 			this.Request.messages[ this.MessagesIndex ] = message;
 			this.MessagesIndex++;
@@ -210,14 +250,18 @@ namespace LineBotCompanyTrip.Services.LineBot {
 			Models.LineBot.ReplyMessage.Action[] actions
 		) {
 
+			Trace.TraceInformation( "Add Confirm Message" );
+
 			if( this.MessagesIndex == this.MaxIndex ) {
-				Trace.TraceInformation( this.MaxIndex + "通以上送信できません" );
+				Trace.TraceWarning( "Message Index == Max Index" );
 				return this;
 			}
 			else if( this.MessagesIndex != 0 ) {
 				Array.Resize( ref this.Request.messages , this.MessagesIndex + 1 );
 			}
-			
+
+			Trace.TraceInformation( "Messages Size is : " + this.Request.messages.Length );
+
 			Template template = new Template() {
 				type = CommonEnum.TemplateType.confirm.ToString() ,
 				text = text ,
@@ -229,7 +273,13 @@ namespace LineBotCompanyTrip.Services.LineBot {
 				altText = altText ,
 				template = template
 			};
-			
+
+			Trace.TraceInformation( "Message Type is : " + message.type );
+			Trace.TraceInformation( "Message Alt Text is : " + message.altText );
+			Trace.TraceInformation( "Message Template Type is : " + message.template.type );
+			Trace.TraceInformation( "Message Template Text is : " + message.template.text );
+			Trace.TraceInformation( "Message Template Actions Length is : " + message.template.actions.Length );
+
 			this.Request.messages[ this.MessagesIndex ] = message;
 			this.MessagesIndex++;
 
@@ -250,14 +300,18 @@ namespace LineBotCompanyTrip.Services.LineBot {
 			string altText ,
 			Column[] columns
 		) {
+			
+			Trace.TraceInformation( "Add Carousel Message" );
 
 			if( this.MessagesIndex == this.MaxIndex ) {
-				Trace.TraceInformation( this.MaxIndex + "通以上送信できません" );
+				Trace.TraceWarning( "Message Index == Max Index" );
 				return this;
 			}
 			else if( this.MessagesIndex != 0 ) {
 				Array.Resize( ref this.Request.messages , this.MessagesIndex + 1 );
 			}
+
+			Trace.TraceInformation( "Messages Size is : " + this.Request.messages.Length );
 
 			Template template = new Template() {
 				type = CommonEnum.TemplateType.carousel.ToString() ,
@@ -270,6 +324,11 @@ namespace LineBotCompanyTrip.Services.LineBot {
 				template = template
 			};
 			
+			Trace.TraceInformation( "Message Type is : " + message.type );
+			Trace.TraceInformation( "Message Alt Text is : " + message.altText );
+			Trace.TraceInformation( "Message Template Type is : " + message.template.type );
+			Trace.TraceInformation( "Message Template Column Length is : " + message.template.columns.Length );
+
 			this.Request.messages[ this.MessagesIndex ] = message;
 			this.MessagesIndex++;
 
@@ -283,6 +342,8 @@ namespace LineBotCompanyTrip.Services.LineBot {
 		/// <returns></returns>
 		public async Task Send() {
 			
+			Trace.TraceInformation( "Reply Message Send Start" );
+
 			string jsonRequest = JsonConvert.SerializeObject( this.Request );
 			Trace.TraceInformation( "Reply Message Request is : " + jsonRequest );
 			StringContent content = new StringContent( jsonRequest );
@@ -299,17 +360,19 @@ namespace LineBotCompanyTrip.Services.LineBot {
 				response.Dispose();
 			}
 			catch( ArgumentNullException e ) {
-				Trace.TraceInformation( "Emotion API Argument Null Exception " + e.Message );
+				Trace.TraceError( "Reply Message Send Argument Null Exception " + e.Message );
 			}
 			catch( HttpRequestException e ) {
-				Trace.TraceInformation( "Emotion API Http Request Exception " + e.Message );
+				Trace.TraceError( "Reply Message Send Http Request Exception " + e.Message );
 			}
 			catch( Exception e ) {
-				Trace.TraceInformation( "予期せぬ例外 " + e.Message );
+				Trace.TraceError( "Reply Message Send 予期せぬ例外 " + e.Message );
 			}
 
 			content.Dispose();
 			client.Dispose();
+			
+			Trace.TraceInformation( "Reply Message Send End" );
 
 		}
 		

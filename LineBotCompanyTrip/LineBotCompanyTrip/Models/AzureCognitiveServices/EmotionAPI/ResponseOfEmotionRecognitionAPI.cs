@@ -1,11 +1,11 @@
 ﻿namespace LineBotCompanyTrip.Models.AzureCognitiveServices.EmotionAPI {
 
 	/// <summary>
-	/// Emotion APIに使用するレスポンスEntity
+	/// Emotion API - Recognitionに使用するレスポンスEntity
 	/// Emotion APIはオブジェクトでなく、配列を返すので
 	/// そのオブジェクト一つ分のデータ群
 	/// </summary>
-	public class ResponseOfEmotionAPI {
+	public class ResponseOfEmotionRecognitionAPI {
 
 		/// <summary>
 		/// 顔座標のデータ

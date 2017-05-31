@@ -16,6 +16,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Web.Http;
 using LineBotCompanyTrip.Services.SQLServer;
+using System;
 
 namespace LineBotCompanyTrip.Controllers {
 
@@ -36,21 +37,27 @@ namespace LineBotCompanyTrip.Controllers {
 		/// <returns>常にステータス200のみを返す</returns>
 		public async Task<HttpResponseMessage> Post( JToken requestToken ) {
 
-			Trace.TraceInformation( "Webhook API 開始" );
-			Trace.TraceInformation( "Request Token is " + requestToken.ToString() );
+			Trace.TraceInformation( "Webhook API Start" );
+
+			Trace.TraceInformation( "Request Token is : " + requestToken.ToString() );
 
 			//イベントの取得
 			Event firstEvent;
 			{
 				RequestOfWebhook request = requestToken.ToObject<RequestOfWebhook>();
 				if( request?.events?[0] == null ) {
-					Trace.TraceInformation( "request.events[0]が取得できませんでした" );
+					Trace.TraceError( "Request.Events[0] is Nothing" );
 					return new HttpResponseMessage( HttpStatusCode.OK );
 				}
 				firstEvent = request.events[ 0 ];
 			}
 			
 			this.sqlServiceServer = new SQLServerService();
+
+			bool isUserId = firstEvent.source.type.Equals( "user" );
+			string userIdOrGroupId = isUserId ? firstEvent.source.userId : firstEvent.source.groupId;
+			Trace.TraceInformation( "Is User Id is : " + isUserId );
+			Trace.TraceInformation( "User Id Or Group Id is : " + userIdOrGroupId );
 
 			//フォロー時イベント
 			if( CommonEnum.EventType.follow.ToString().Equals( firstEvent.type ) )
@@ -75,7 +82,7 @@ namespace LineBotCompanyTrip.Controllers {
 				MessageObject message;
 				{
 					if( firstEvent.message == null ) {
-						Trace.TraceInformation( "request.events[0].messageが取得できませんでした" );
+						Trace.TraceError( "Request.Events[0].Message is Nothing" );
 						return new HttpResponseMessage( HttpStatusCode.OK );
 					}
 					message = firstEvent.message;
@@ -85,16 +92,16 @@ namespace LineBotCompanyTrip.Controllers {
 				if( CommonEnum.MessageType.text.ToString().Equals( message.type ) && Regex.IsMatch( message.text , @"(.)*集計して(.)*" ) )
 					return await this.RankingMessageEvent( 
 						firstEvent.replyToken , 
-						firstEvent.source.userId ,
-						firstEvent.source.groupId
+						isUserId ,
+						userIdOrGroupId
 					);
 				
 				//画像メッセージ送信時イベント
 				else if( CommonEnum.MessageType.image.ToString().Equals( message.type ) )
 					return await this.ImageMessageEvent( 
-						firstEvent.replyToken , 
-						firstEvent.source.userId ,
-						firstEvent.source.groupId ,
+						firstEvent.replyToken ,
+						isUserId ,
+						userIdOrGroupId ,
 						message.id ,
 						firstEvent.timestamp
 					);
@@ -108,29 +115,30 @@ namespace LineBotCompanyTrip.Controllers {
 				if( CommonEnum.PostbackEvent.count.ToString().Equals( firstEvent.postback.data ) )
 					return await this.CountRankingEvent( 
 						firstEvent.replyToken ,
-						firstEvent.source.userId , 
-						firstEvent.source.groupId
+						isUserId ,
+						userIdOrGroupId
 					);
 
 				//笑顔ランキング
 				else if( CommonEnum.PostbackEvent.happiness.ToString().Equals( firstEvent.postback.data ) )
 					return await this.HappinessRankingEvent(
 						firstEvent.replyToken ,
-						firstEvent.source.userId ,
-						firstEvent.source.groupId
+						isUserId ,
+						userIdOrGroupId
 					);
 
 				//表情豊かランキング
 				else if( CommonEnum.PostbackEvent.emotion.ToString().Equals( firstEvent.postback.data ) )
 					return await this.EmotionRankingEvent(
 						firstEvent.replyToken ,
-						firstEvent.source.userId ,
-						firstEvent.source.groupId
+						isUserId ,
+						userIdOrGroupId
 					);
 				
 			}
 
-			Trace.TraceInformation( "指定外のイベントが呼ばれました" );
+			Trace.TraceInformation( "指定外のイベント" );
+			
 			return new HttpResponseMessage( HttpStatusCode.OK );
 			
 		}
@@ -143,10 +151,9 @@ namespace LineBotCompanyTrip.Controllers {
 		/// <returns>ステータス200</returns>
 		private async Task<HttpResponseMessage> FollowEvent( string replyToken , string userId ) {
 
-			Trace.TraceInformation( "フォローイベント通知" );
-
-			// ユーザIDのDB登録
-			this.sqlServiceServer.RegistLineInfo( userId , true );
+			Trace.TraceInformation( "Follow Event Start" );
+			
+			this.sqlServiceServer.RegistLine( userId , true );
 
 			//メッセージの通知
 			{
@@ -155,6 +162,8 @@ namespace LineBotCompanyTrip.Controllers {
 					.AddTextMessage( "友達追加ありがとうございます！\n仲良くしてくださいね！" )
 					.Send();
 			}
+
+			Trace.TraceInformation( "Follow Event End" );
 
 			return new HttpResponseMessage( HttpStatusCode.OK );
 
@@ -168,10 +177,9 @@ namespace LineBotCompanyTrip.Controllers {
 		/// <returns>ステータス200</returns>
 		private async Task<HttpResponseMessage> JoinEvent( string replyToken , string groupId ) {
 
-			Trace.TraceInformation( "グループ追加イベント通知" );
-
-			// グループIDのDB登録
-			this.sqlServiceServer.RegistLineInfo( groupId , false );
+			Trace.TraceInformation( "Join Event Start" );
+			
+			this.sqlServiceServer.RegistLine( groupId , false );
 
 			//メッセージの通知
 			{
@@ -180,6 +188,8 @@ namespace LineBotCompanyTrip.Controllers {
 					.AddTextMessage( "グループ追加ありがとうございます！\n仲良くしてくださいね！" )
 					.Send();
 			}
+
+			Trace.TraceInformation( "Join Event End" );
 
 			return new HttpResponseMessage( HttpStatusCode.OK );
 
@@ -191,11 +201,12 @@ namespace LineBotCompanyTrip.Controllers {
 		/// <param name="userId">ユーザID</param>
 		/// <returns>ステータス200</returns>
 		private HttpResponseMessage UnfollowEvent( string userId ) {
+			
+			Trace.TraceInformation( "Unfollow Event Start" );
+			
+			this.sqlServiceServer.LeaveLine( userId , true );
 
-			Trace.TraceInformation( "アンフォローイベント通知" );
-
-			// ユーザIDからわかるDBレコード削除
-			this.sqlServiceServer.LeaveLineInfo( userId , true );
+			Trace.TraceInformation( "Unfollow Event End" );
 
 			return new HttpResponseMessage( HttpStatusCode.OK );
 
@@ -208,10 +219,11 @@ namespace LineBotCompanyTrip.Controllers {
 		/// <returns>ステータス200</returns>
 		private HttpResponseMessage LeaveEvent( string groupId ) {
 
-			Trace.TraceInformation( "グループ退出イベント通知" );
-
-			// グループIDからわかるDBレコード削除
-			this.sqlServiceServer.LeaveLineInfo( groupId , false );
+			Trace.TraceInformation( "Leave Event Start" );
+			
+			this.sqlServiceServer.LeaveLine( groupId , false );
+			
+			Trace.TraceInformation( "Leave Event End" );
 
 			return new HttpResponseMessage( HttpStatusCode.OK );
 
@@ -221,19 +233,19 @@ namespace LineBotCompanyTrip.Controllers {
 		/// 画像メッセージ送信時イベント
 		/// </summary>
 		/// <param name="replyToken">リプライトークン</param>
-		/// <param name="userId">ユーザID</param>
-		/// <param name="groupId">グループID</param>
+		/// <param name="isUserId">ユーザIDかどうか</param>
+		/// <param name="id">ユーザIDまたはグループID</param>
 		/// <param name="messageId">メッセージID</param>
 		/// <param name="timestamp">Webhook受信日時</param>
 		/// <returns>ステータス200</returns>
 		private async Task<HttpResponseMessage> ImageMessageEvent( 
 			string replyToken ,
-			string userId ,
-			string groupId ,
+			bool isUserId ,
+			string id ,
 			string messageId ,
 			string timestamp ) {
 
-			Trace.TraceInformation( "メッセージイベント通知－画像" );
+			Trace.TraceInformation( "Image Message Event Start" );
 
 			//Contentより画像のバイナリデータ取得
 			byte[] imageBytes = null;
@@ -243,27 +255,27 @@ namespace LineBotCompanyTrip.Controllers {
 			}
 			
 			//Face APIよりFaceIDの取得
-			List<ResponseOfFaceAPI> responseOfFaceAPI = null;
+			List<ResponseOfFaceDetectAPI> responseOfFaceDetectAPI = null;
 			{
 				FaceService faceService = new FaceService();
-				responseOfFaceAPI = await faceService.Call( imageBytes );
+				responseOfFaceDetectAPI = await faceService.CallDetect( imageBytes );
 			}
 						
 			//Emotion APIより解析結果取得
-			List<ResponseOfEmotionAPI> responseOfEmotionAPI = null;
+			List<ResponseOfEmotionRecognitionAPI> responseOfEmotionRecognitionAPI = null;
 			{
 				EmotionService emotionService = new EmotionService();
-				responseOfEmotionAPI = await emotionService.Call( imageBytes );
+				responseOfEmotionRecognitionAPI = await emotionService.CallRecognition( imageBytes );
 			}
 
 			//画像を加工
 			List<byte[]> processedImageBytesList = new List<byte[]>();
 			{
 				ProcessPictureService processPictureService = new ProcessPictureService();
-				foreach( ResponseOfEmotionAPI response in responseOfEmotionAPI ) {
-			byte[] processedImageBytes = new byte[ imageBytes.Length ];
-			imageBytes.CopyTo( processedImageBytes , 0 );
-					processedImageBytes = processPictureService.DrawAnalysis( processedImageBytes , response );
+				foreach( ResponseOfEmotionRecognitionAPI response in responseOfEmotionRecognitionAPI ) {
+					byte[] processedImageBytes = new byte[ imageBytes.Length ];
+					imageBytes.CopyTo( processedImageBytes , 0 );
+					processedImageBytes = processPictureService.DrawAnalysisOnPicture( processedImageBytes , response );
 					processedImageBytesList.Add( processedImageBytes );
 				}
 			}
@@ -273,26 +285,23 @@ namespace LineBotCompanyTrip.Controllers {
 			List<string> processedUrls = new List<string>();
 			{
 				SavePictureInAzureStorageService savePictureInAzureStorageService = new SavePictureInAzureStorageService();
-				originalUrl = savePictureInAzureStorageService.SaveImage( imageBytes , timestamp , true );
+				originalUrl = savePictureInAzureStorageService.StorePicture( imageBytes , timestamp , true );
 				for( int i = 0 ; i < processedImageBytesList.Count ; i++ ) {
-					processedUrls.Add( savePictureInAzureStorageService.SaveImage( processedImageBytesList[ i ] , timestamp , false , i ) );
+					processedUrls.Add( savePictureInAzureStorageService.StorePicture( processedImageBytesList[ i ] , timestamp , false , i ) );
 				}
 			}
 
-			// TODO Face APIの顔群とEmotionAPIの解析群の紐づけ
-
-			int pictureId = this.sqlServiceServer.RegistPicture( userId , groupId , originalUrl );
 
 			// DBに画像情報を登録
-			for( int i = 0 ; i < responseOfEmotionAPI.Count ; i++ ) {
-				this.sqlServiceServer.RegistFace( pictureId , responseOfEmotionAPI[ i ] , processedUrls[ i ] );
+			int pictureId = this.sqlServiceServer.RegistPicture( isUserId , id , originalUrl );
+			for( int i = 0 ; i < responseOfEmotionRecognitionAPI.Count ; i++ ) {
+				this.sqlServiceServer.RegistFace( pictureId , responseOfEmotionRecognitionAPI[ i ] , processedUrls[ i ] , responseOfFaceDetectAPI[i].faceId );
 			}
-
-
+			
 			//解析結果の通知
 			{
 
-				if( responseOfEmotionAPI == null || responseOfEmotionAPI.Count == 0 ) {
+				if( responseOfEmotionRecognitionAPI == null || responseOfEmotionRecognitionAPI.Count == 0 ) {
 
 					ReplyMessageService replyMessageService = new ReplyMessageService( replyToken );
 					await replyMessageService
@@ -307,7 +316,7 @@ namespace LineBotCompanyTrip.Controllers {
 					columnCreator = columnCreator.CreateColumn();
 					for( int i = 0 ; i < processedUrls.Count ; i++ ) {
 
-						string[] resultText = GetAnalysis( responseOfEmotionAPI[ i ] ).Split( '\n' );
+						string[] resultText = GetAnalysis( responseOfEmotionRecognitionAPI[ i ] ).Split( '\n' );
 
 						columnCreator = columnCreator
 							.AddColumn(
@@ -325,6 +334,8 @@ namespace LineBotCompanyTrip.Controllers {
 				}
 				
 			}
+
+			Trace.TraceInformation( "Image Message Event End" );
 
 			return new HttpResponseMessage( HttpStatusCode.OK );
 
@@ -392,7 +403,7 @@ namespace LineBotCompanyTrip.Controllers {
 		/// </summary>
 		/// <param name="resultOfEmotion">Emotion APIの結果</param>
 		/// <returns>解析結果</returns>
-		private string GetAnalysis( ResponseOfEmotionAPI resultOfEmotion ) {
+		private string GetAnalysis( ResponseOfEmotionRecognitionAPI resultOfEmotion ) {
 
 			CommonEnum.EmotionType type = CommonEnum.EmotionType.neutral;
 			double value = 0.0;
@@ -406,19 +417,18 @@ namespace LineBotCompanyTrip.Controllers {
 		/// 「集計して」メッセージ送信時イベント
 		/// </summary>
 		/// <param name="replyToken">リプライトークン</param>
-		/// <param name="userId">ユーザID</param>
-		/// <param name="groupId">グループID</param>
+		/// <param name="isUserId">ユーザIDかどうか</param>
+		/// <param name="id">ユーザIDまたはグループID</param>
 		/// <returns>ステータス200</returns>
 		private async Task<HttpResponseMessage> RankingMessageEvent( 
 			string replyToken ,
-			string userId ,
-			string groupId
+			bool isUserId ,
+			string id
 		) {
 
-			Trace.TraceInformation( "メッセージイベント通知－集計" );
-
-			// DBよりpostbackステータス更新
-			this.sqlServiceServer.UpdatePostback( userId , groupId , true );
+			Trace.TraceInformation( "Ranking Message Event Start" );
+			
+			this.sqlServiceServer.UpdatePostback( isUserId , id , true );
 
 			//テンプレートメッセージ通知
 			{
@@ -453,6 +463,8 @@ namespace LineBotCompanyTrip.Controllers {
 				.Send();
 			}
 
+			Trace.TraceInformation( "Ranking Message Event End" );
+
 			return new HttpResponseMessage( HttpStatusCode.OK );
 
 		}
@@ -461,38 +473,72 @@ namespace LineBotCompanyTrip.Controllers {
 		/// よく写真に撮られる人ランキングイベント
 		/// </summary>
 		/// <param name="replyToken">リプライトークン</param>
-		/// <param name="userId">ユーザID</param>
-		/// <param name="groupId">グループID</param>
+		/// <param name="isUserId">ユーザIDかどうか</param>
+		/// <param name="id">ユーザIDまたはグループID</param>
 		/// <returns>ステータス200</returns>
 		private async Task<HttpResponseMessage> CountRankingEvent( 
 			string replyToken ,
-			string userId ,
-			string groupId 
+			bool isUserId ,
+			string id 
 		) {
+			
+			Trace.TraceInformation( "Count Ranking Event Start" );
 
-			Trace.TraceInformation( "Postbackイベント通知－よく写真に撮られる人ランキング" );
+			//PostbackStatusの確認と更新
+			{
 
-			// 初期化状態でないなら何もしない
-			if( !this.sqlServiceServer.IsPostbackInitialization( userId , groupId ) ) {
-				Trace.TraceInformation( "アクション初期化がされていない" );
-				return new HttpResponseMessage( HttpStatusCode.OK );
+				if( this.sqlServiceServer.IsPostbackInitialization( isUserId , id ) ) {
+					Trace.TraceError( "Postback Is Not Initialization" );
+					Trace.TraceInformation( "Count Ranking Event End" );
+					return new HttpResponseMessage( HttpStatusCode.OK );
+				}
+				this.sqlServiceServer.UpdatePostback( isUserId , id , false );
+
 			}
 
-			// postbackステータス更新
-			this.sqlServiceServer.UpdatePostback( userId , groupId , false );
-			
-			// DBより画像を3枚取得
-			string url1 = "";
-			string url2 = "";
-			string url3 = "";
+			List<string> faceIds = this.sqlServiceServer.GetFaceIds( isUserId , id );
 
-			// 撮られた回数
+			//Face APIよりFaceIDのグループ分け
+			ResponseOfFaceGroupAPI responseOfFaceGroupAPI = null;
+			{
+				FaceService faceService = new FaceService();
+				responseOfFaceGroupAPI = await faceService.CallGroup( faceIds );
+			}
+
+			//グループ分けされたFaceIdを数の多いものから順に3つ取得
 			int count1 = 0;
 			int count2 = 0;
 			int count3 = 0;
+			string url1 = "";
+			string url2 = "";
+			string url3 = "";
+			{
 
-			this.sqlServiceServer.GetMostPhotographed( userId , groupId , ref url1 , ref count1 , ref url2 , ref count2 , ref url3 , ref count3 );
+				string faceId1 = "";
+				string faceId2 = "";
+				string faceId3 = "";
+				
+				List<string[]> groups = new List<string[]>();
+				foreach( string[] ids in responseOfFaceGroupAPI.groups ) {
+					groups.Add( ids );
+				}
+				groups.Sort( ( x , y ) => y.Length - x.Length );
 
+				count1 = groups[ 0 ].Length;
+				faceId1 = groups[ 0 ][ 0 ];
+
+				count2 = groups[ 1 ].Length;
+				faceId2 = groups[ 1 ][ 0 ];
+
+				count3 = groups[ 2 ].Length;
+				faceId3 = groups[ 2 ][ 0 ];
+				
+				url1 = this.sqlServiceServer.GetFaceUrl( faceId1 );
+				url2 = this.sqlServiceServer.GetFaceUrl( faceId2 );
+				url3 = this.sqlServiceServer.GetFaceUrl( faceId3 );
+
+			}
+			
 			//解析結果の通知
 			{
 
@@ -540,6 +586,8 @@ namespace LineBotCompanyTrip.Controllers {
 
 			}
 
+			Trace.TraceInformation( "Count Ranking Event End" );
+
 			return new HttpResponseMessage( HttpStatusCode.OK );
 
 		}
@@ -548,27 +596,29 @@ namespace LineBotCompanyTrip.Controllers {
 		/// 笑顔ランキング
 		/// </summary>
 		/// <param name="replyToken">リプライトークン</param>
-		/// <param name="userId">ユーザID</param>
-		/// <param name="groupId">グループID</param>
+		/// <param name="isUserId">ユーザIDかどうか</param>
+		/// <param name="id">ユーザIDまたはグループID</param>
 		/// <returns>ステータス200</returns>
 		private async Task<HttpResponseMessage> HappinessRankingEvent(
 			string replyToken ,
-			string userId ,
-			string groupId
+			bool isUserId ,
+			string id
 		) {
 
-			Trace.TraceInformation( "Postbackイベント通知－笑顔ランキング" );
+			Trace.TraceInformation( "Happiness Ranking Event Start" );
 
-			// 初期化状態でないなら何もしない
-			if( !this.sqlServiceServer.IsPostbackInitialization( userId , groupId ) ) {
-				Trace.TraceInformation( "アクション初期化がされていない" );
-				return new HttpResponseMessage( HttpStatusCode.OK );
+			//PostbackStatusの確認と更新
+			{
+
+				if( this.sqlServiceServer.IsPostbackInitialization( isUserId , id ) ) {
+					Trace.TraceError( "Postback Is Not Initialization" );
+					Trace.TraceInformation( "Happiness Ranking Event End" );
+					return new HttpResponseMessage( HttpStatusCode.OK );
+				}
+				this.sqlServiceServer.UpdatePostback( isUserId , id , false );
+
 			}
-
-			// postbackステータス更新
-			this.sqlServiceServer.UpdatePostback( userId , groupId , false );
-
-			// DBより画像を3枚取得
+			
 			string url1 = "";
 			string url2 = "";
 			string url3 = "";
@@ -577,7 +627,7 @@ namespace LineBotCompanyTrip.Controllers {
 			double value2 = 0.0;
 			double value3 = 0.0;
 
-			this.sqlServiceServer.GetMostHappiness( userId , groupId , ref url1 , ref value1 , ref url2 , ref value2 , ref url3 , ref value3 );
+			this.sqlServiceServer.GetMostHappiness( isUserId , id , ref url1 , ref value1 , ref url2 , ref value2 , ref url3 , ref value3 );
 
 			//解析結果の通知
 			{
@@ -630,6 +680,8 @@ namespace LineBotCompanyTrip.Controllers {
 
 			}
 
+			Trace.TraceInformation( "Happiness Ranking Event End" );
+
 			return new HttpResponseMessage( HttpStatusCode.OK );
 
 		}
@@ -638,27 +690,29 @@ namespace LineBotCompanyTrip.Controllers {
 		/// 表情豊かランキング
 		/// </summary>
 		/// <param name="replyToken">リプライトークン</param>
-		/// <param name="userId">ユーザID</param>
-		/// <param name="groupId">グループID</param>
+		/// <param name="isUserId">ユーザIDかどうか</param>
+		/// <param name="id">ユーザIDまたはグループID</param>
 		/// <returns>ステータス200</returns>
 		private async Task<HttpResponseMessage> EmotionRankingEvent(
 			string replyToken ,
-			string userId ,
-			string groupId
+			bool isUserId ,
+			string id
 		) {
 
-			Trace.TraceInformation( "Postbackイベント通知－表情豊かランキング" );
+			Trace.TraceInformation( "Emotion Ranking Event Start" );
 
-			// 初期化状態でないなら何もしない
-			if( !this.sqlServiceServer.IsPostbackInitialization( userId , groupId ) ) {
-				Trace.TraceInformation( "アクション初期化がされていない" );
-				return new HttpResponseMessage( HttpStatusCode.OK );
+			//PostbackStatusの確認と更新
+			{
+
+				if( this.sqlServiceServer.IsPostbackInitialization( isUserId , id ) ) {
+					Trace.TraceError( "Postback Is Not Initialization" );
+					Trace.TraceInformation( "Emotion Ranking Event End" );
+					return new HttpResponseMessage( HttpStatusCode.OK );
+				}
+				this.sqlServiceServer.UpdatePostback( isUserId , id , false );
+
 			}
 
-			// postbackステータス更新
-			this.sqlServiceServer.UpdatePostback( userId , groupId , false );
-
-			// DBより画像を3枚取得
 			string url1 = "";
 			string url2 = "";
 			string url3 = "";
@@ -671,7 +725,7 @@ namespace LineBotCompanyTrip.Controllers {
 			double value2 = 0.0;
 			double value3 = 0.0;
 
-			this.sqlServiceServer.GetMostEmotion( userId , groupId , ref url1 , ref type1 , ref value1 , ref url2 , ref type2 , ref value2 , ref url3 , ref type3 , ref value3 );
+			this.sqlServiceServer.GetMostEmotion( isUserId , id , ref url1 , ref type1 , ref value1 , ref url2 , ref type2 , ref value2 , ref url3 , ref type3 , ref value3 );
 
 			//解析結果の通知
 			{
@@ -719,6 +773,8 @@ namespace LineBotCompanyTrip.Controllers {
 
 			}
 
+			Trace.TraceInformation( "Emotion Ranking Event End" );
+			
 			return new HttpResponseMessage( HttpStatusCode.OK );
 
 		}
