@@ -8,12 +8,22 @@
 		/// <summary>
 		/// サブスクリプションキー
 		/// </summary>
-		public static readonly string OcpApimSubscriptionKey = "";
+		private static readonly string ocpApimSubscriptionKey = "";
+
+		/// <summary>
+		/// サブスクリプションキー
+		/// </summary>
+		public static string OcpApimSubscriptionKey => ocpApimSubscriptionKey;
 
 		/// <summary>
 		/// Emotion APIのURL
 		/// </summary>
-		public static readonly string EmotionApiUrl = "https://westus.api.cognitive.microsoft.com/emotion/v1.0/recognize";
+		private static readonly string emotionApiUrl = "https://westus.api.cognitive.microsoft.com/emotion/v1.0/recognize";
+
+		/// <summary>
+		/// Emotion APIのURL
+		/// </summary>
+		public static string EmotionApiUrl => emotionApiUrl;
 
 	}
 

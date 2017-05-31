@@ -8,12 +8,33 @@
 		/// <summary>
 		/// サブスクリプションキー
 		/// </summary>
-		public static readonly string OcpApimSubscriptionKey = "";
+		private static readonly string ocpApimSubscriptionKey = "";
 
 		/// <summary>
-		/// Face APIのURL
+		/// サブスクリプションキー
 		/// </summary>
-		public static readonly string FaceApiUrl = "https://westus.api.cognitive.microsoft.com/face/v1.0/detect/";
+		public static string OcpApimSubscriptionKey => ocpApimSubscriptionKey;
+
+		/// <summary>
+		/// Face API DetectのURL
+		/// </summary>
+		private static readonly string faceDetectApiUrl = "https://westus.api.cognitive.microsoft.com/face/v1.0/detect/";
+
+		/// <summary>
+		/// Face API DetectのURL
+		/// </summary>
+		public static string FaceDetectApiUrl => faceDetectApiUrl;
+
+		/// <summary>
+		/// FaceIDグループ化APIのURL
+		/// </summary>
+		private static readonly string faceGroupApiUrl = "https://westus.api.cognitive.microsoft.com/face/v1.0/group";
+
+		/// <summary>
+		/// FaceIDグループ化APIのURL
+		/// </summary>
+		public static string FaceGroupApiUrl => faceGroupApiUrl;
 
 	}
+
 }

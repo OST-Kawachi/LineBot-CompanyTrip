@@ -5,6 +5,8 @@ using LineBotCompanyTrip.Models.AzureCognitiveServices.EmotionAPI;
 using System.Data.SqlClient;
 using LineBotCompanyTrip.Configurations;
 using System;
+using System.IO;
+using System.Configuration;
 
 namespace LineBotCompanyTrip.Services.SQLServer {
 
@@ -33,327 +35,777 @@ namespace LineBotCompanyTrip.Services.SQLServer {
 			};
 
 			this.connectionString = builder.ToString();
+
+			Trace.TraceInformation( "Azure SQL Server Connection String Create : SUCCESS" );
+			Trace.TraceInformation( "Connection String is : " + this.connectionString );
 			
 		}
 
 		/// <summary>
-		/// LINE情報の登録
+		/// WHERE句に使用するLine.UserIdでの絞込みまたはLine.GroupIdでの絞込み分
 		/// </summary>
-		/// <param name="id">ユーザIDもしくはグループID</param>
 		/// <param name="isUserId">ユーザIDかどうか</param>
-		/// <returns>LINEID</returns>
-		public void RegistLineInfo( string id , bool isUserId ) {
+		/// <param name="id">ユーザIDまたはグループID</param>
+		/// <returns>Line.UserId = @UserId　または　Line.GroupId = @GroupId</returns>
+		private string GetWhereUserIdOrGroupId( bool isUserId , string id ) => (
+			isUserId
+			? @" CONVERT( VARCHAR , Line.UserId ) = CONVERT( VARCHAR , @UserId ) "
+			: @" CONVERT( VARCHAR , Line.GroupId ) = CONVERT( VARCHAR , @GroupId ) "
+		);
+		
+		/// <summary>
+		/// MostEmotionのメソッドで表情種別毎に何度も呼ばれるサブクエリを共通化
+		/// </summary>
+		/// <param name="typeString"></param>
+		/// <param name="isUserId"></param>
+		/// <param name="id"></param>
+		/// <returns></returns>
+		private string GetSubQueryOfMostEmotion( string typeString , bool isUserId , string id ) => @"
+			SELECT TOP( 3 ) Face.ProcessedPicturePath as Path , Face." + typeString + @" as Value , '" + typeString + @"' as Type
+			FROM Face
+			WHERE Face." + typeString + @" IN(
+				SELECT TOP( 3 ) MAX( Face." + typeString + @" ) as Value
+				FROM Face
+				INNER JOIN Picture
+				ON Face.PictureId = Picture.PictureId
+				INNER JOIN Line
+				ON Picture.LineId = Line.LineId
+				WHERE " + this.GetWhereUserIdOrGroupId( isUserId , id ) + @"
+				GROUP BY Face." + typeString + @"
+				ORDER BY Face." + typeString + @" DESC
+			) 
+			ORDER BY Face." + typeString + @" DESC
+			";
 
-			Trace.TraceInformation( "LINE情報の登録" );
+		/// <summary>
+		/// 登録されているLineIDのうち、最大のものを取得する
+		/// メソッド内でSqlConnection.Close()はしない
+		/// </summary>
+		/// <param name="alreadyOpenedConnection">既にSqlConnection.Open()が呼ばれているコネクション</param>
+		/// <returns>取得できなかった場合は-1</returns>
+		private int GetMaxLineId( SqlConnection alreadyOpenedConnection ) {
 
-			SqlConnection connection = null;
+			Trace.TraceInformation( "Get Max Line Id Start" );
+
+			int maxLineId = -1;
+
+			string selectSql = @"
+				SELECT TOP( 1 ) Line.LineId as LineId
+				FROM Line
+				ORDER BY Line.LineId DESC;
+			";
+			Trace.TraceInformation( "Get Max Line Id SQL is : " + selectSql );
+
+			SqlCommand selectSqlCommand = new SqlCommand( selectSql , alreadyOpenedConnection );
+
+			Trace.TraceInformation( "SQL Execute" );
+			SqlDataReader reader = null;
 			try {
-
-				//SQL発行
-				{
-					connection = new SqlConnection( this.connectionString );
-					connection.Open();
-					Trace.TraceInformation( "Connection Open" );
-
-					//IDの最大値を取得する
-					int maxLineId = -1;
-					{
-
-						string selectSql =
-							@"SELECT TOP( 1 ) Line.LineId as LineId " +
-							"FROM Line " +
-							"ORDER BY Line.LineId DESC " +
-							";";
-						Trace.TraceInformation( "Max Line Id SQL is : " + selectSql );
-
-						SqlCommand selectSqlCommand = new SqlCommand( selectSql , connection );
-
-						Trace.TraceInformation( "SQL Execute" );
-						using( SqlDataReader reader = selectSqlCommand.ExecuteReader() ) {
-							while( reader.Read() == true ) {
-								int? readerLineId = reader[ "LineId" ] as int?;
-								maxLineId = readerLineId.HasValue ? readerLineId.Value : -1;
-								break;
-							}
-						}
-
-						Trace.TraceInformation( "Max Line Id is : " + maxLineId );
-
-					}
-
-					//Line情報の登録
-					{
-
-						int lineId = maxLineId + 1;
-
-						string insertSql =
-							@"INSERT INTO Line ( LineId , Type , UserId , GroupId , PostbackStatus ) VALUES ( @LineId , @Type , @UserId , @GroupId , @PostbackStatus );";
-
-						Trace.TraceInformation( "Regist Line Info SQL is : " + insertSql );
-
-						SqlCommand insertSqlCommand = new SqlCommand( insertSql , connection );
-						insertSqlCommand.Parameters.AddWithValue( "@LineId" , lineId );
-						insertSqlCommand.Parameters.AddWithValue( "@Type" , ( isUserId ? 0 : 1 ) );
-						insertSqlCommand.Parameters.AddWithValue( "@UserId" , ( isUserId ? id : "" ) );
-						insertSqlCommand.Parameters.AddWithValue( "@GroupId" , ( isUserId ? "" : id ) );
-						insertSqlCommand.Parameters.AddWithValue( "@PostbackStatus" , 0 );
-						
-						int result = insertSqlCommand.ExecuteNonQuery();
-
-						if( result < 1 )
-							Trace.TraceInformation( "Insert Error" );
-
-					}
-
-					connection.Close();
-
+				reader = selectSqlCommand.ExecuteReader();
+				while( reader.Read() == true ) {
+					int? readerLineId = reader[ "LineId" ] as int?;
+					maxLineId = readerLineId.GetValueOrDefault( -1 );
+					break;
 				}
-
+				reader.Close();
+			}
+			catch( InvalidCastException e ) {
+				Trace.TraceError( "Get Max Line Id Invalid Cast Exception : " + e.Message );
+				reader?.Close();
+			}
+			catch( SqlException e ) {
+				Trace.TraceError( "Get Max Line Id Sql Exception : " + e.Message );
+				reader?.Close();
+			}
+			catch( ObjectDisposedException e ) {
+				Trace.TraceError( "Get Max Line Id Object Disposed Exception : " + e.Message );
+				reader?.Close();
+			}
+			catch( InvalidOperationException e ) {
+				Trace.TraceError( "Get Max Line Id Invalid Operation Exception : " + e.Message );
+				reader?.Close();
+			}
+			catch( IOException e ) {
+				Trace.TraceError( "Get Max Line Id IOException : " + e.Message );
+				reader?.Close();
 			}
 			catch( Exception e ) {
-				connection?.Close();
-				Trace.TraceInformation( "DB Error : " + e.Message );
-			}
-
-		}
-
-		/// <summary>
-		/// LINE情報の削除
-		/// </summary>
-		/// <param name="id">ユーザIDもしくはグループID</param>
-		/// <param name="isUserId">ユーザIDかどうか</param>
-		/// <returns>LINEID</returns>
-		public void LeaveLineInfo( string id , bool isUserId ) {
-
-			Trace.TraceInformation( "LINE情報の削除" );
-
-			Trace.TraceInformation( "今回は削除しない" );
-
-		}
-
-		/// <summary>
-		/// Postbackが初期状態かどうか判断
-		/// </summary>
-		/// <param name="userId">ユーザID</param>
-		/// <param name="groupId">グループID</param>
-		/// <returns>初期化状態かどうか</returns>
-		public bool IsPostbackInitialization( string userId , string groupId ) {
-
-			Trace.TraceInformation( "Postbackの判断" );
-
-			// 初期状態かどうか
-			bool isInitialization = true;
-			{
-
-				SqlConnection connection = null;
-				try {
-
-					connection = new SqlConnection( this.connectionString );
-					connection.Open();
-					Trace.TraceInformation( "Connection Open" );
-
-					string selectSql =
-						"SELECT Line.PostbackStatus as Status " +
-						"FROM Line " +
-						"WHERE " + ( !string.IsNullOrEmpty( userId ) ? "CONVERT( VARCHAR , Line.UserId ) = CONVERT( VARCHAR , @UserId ) " : "CONVERT( VARCHAR , Line.GroupId ) = CONVERT( VARCHAR , @GroupId ) " ) +
-						";";
-					Trace.TraceInformation( "Get Postback SQL is : " + selectSql );
-
-					SqlCommand selectSqlCommand = new SqlCommand( selectSql , connection );
-					if( !string.IsNullOrEmpty( userId ) )
-						selectSqlCommand.Parameters.AddWithValue( "@UserId" , userId );
-					else
-						selectSqlCommand.Parameters.AddWithValue( "@GroupId" , groupId );
-
-					Trace.TraceInformation( "SQL Execute" );
-					using( SqlDataReader reader = selectSqlCommand.ExecuteReader() ) {
-						while( reader.Read() == true ) {
-							int? status = reader[ "Status" ] as int?;
-							isInitialization = status.HasValue ? status.Value == 0 : true;
-							break;
-						}
-					}
-
-					Trace.TraceInformation( "Initialization is : " + isInitialization );
-					
-					connection.Close();
-					
-				}
-				catch( Exception e ) {
-					connection?.Close();
-					Trace.TraceInformation( "DB Error : " + e.Message );
-				}
-				
+				Trace.TraceError( "Get Max Line Id 予期せぬ例外 : " + e.Message );
+				reader?.Close();
 			}
 			
-			return isInitialization;
+			Trace.TraceInformation( "Max Line Id is : " + maxLineId );
+
+			Trace.TraceInformation( "Get Max Line Id End" );
+
+			return maxLineId;
+
+		}
+
+		/// <summary>
+		/// LineIdを取得する
+		/// メソッド内でSqlConnection.Close()はしない
+		/// </summary>
+		/// <param name="alreadyOpenedConnection">既にSqlConnection.Open()が呼ばれているコネクション</param>
+		/// <param name="lineId">LINEのid</param>
+		/// <param name="isUserId"><see cref="id"/>がユーザIDかどうか</param>
+		/// <returns>LineId</returns>
+		private int GetLineId( SqlConnection alreadyOpenedConnection , bool isUserId , string id ) {
+
+			Trace.TraceInformation( "Get Line Id Start" );
+
+			Trace.TraceInformation( "Get Line Id Is User Id is : " + isUserId );
+			Trace.TraceInformation( "Get Line Id Id is : " + id );
+
+			int lineId = -1;
+
+			string selectLineIdSql = @"
+				SELECT Line.LineId as LineId
+				FROM Line
+				WHERE " + this.GetWhereUserIdOrGroupId( isUserId , id ) + ";";
+			Trace.TraceInformation( "Get Line Id SQL is : " + selectLineIdSql );
+			
+			SqlCommand selectSqlCommand = new SqlCommand( selectLineIdSql , alreadyOpenedConnection );
+			if( isUserId )
+				selectSqlCommand.Parameters.AddWithValue( "@UserId" , id );
+			else 
+				selectSqlCommand.Parameters.AddWithValue( "@GroupId" , id );
+
+
+			Trace.TraceInformation( "SQL Execute" );
+			SqlDataReader reader = null;
+			try {
+				reader = selectSqlCommand.ExecuteReader();
+				while( reader.Read() == true ) {
+					int? readerLineId = reader[ "LineId" ] as int?;
+					lineId = readerLineId.GetValueOrDefault( -1 );
+					break;
+				}
+				reader.Close();
+			}
+			catch( InvalidCastException e ) {
+				Trace.TraceError( "Get Line Id Invalid Cast Exception : " + e.Message );
+				reader?.Close();
+			}
+			catch( SqlException e ) {
+				Trace.TraceError( "Get Line Id Sql Exception : " + e.Message );
+				reader?.Close();
+			}
+			catch( ObjectDisposedException e ) {
+				Trace.TraceError( "Get Line Id Object Disposed Exception : " + e.Message );
+				reader?.Close();
+			}
+			catch( InvalidOperationException e ) {
+				Trace.TraceError( "Get Line Id Invalid Operation Exception : " + e.Message );
+				reader?.Close();
+			}
+			catch( IOException e ) {
+				Trace.TraceError( "Get Line Id IOException : " + e.Message );
+				reader?.Close();
+			}
+			catch( Exception e ) {
+				Trace.TraceError( "Get Line Id 予期せぬ例外 : " + e.Message );
+				reader?.Close();
+			}
+			
+			Trace.TraceInformation( "Line Id is : " + lineId );
+			
+			Trace.TraceInformation( "Get Line Id End" );
+
+			return lineId;
+
+		}
+
+		/// <summary>
+		/// ライン情報を登録する
+		/// メソッド内でSqlConnection.Close()はしない
+		/// </summary>
+		/// <param name="alreadyOpenedConnection">既にSqlConnection.Open()が呼ばれているコネクション</param>
+		/// <param name="lineId">LINEのid</param>
+		/// <param name="isUserId"><see cref="id"/>がユーザIDかどうか</param>
+		/// <param name="id">ユーザIDまたはグループID</param>
+		private void InsertLine( SqlConnection alreadyOpenedConnection , int lineId , bool isUserId , string id ) {
+
+			Trace.TraceInformation( "Insert Line Start" );
+
+			Trace.TraceInformation( "Insert Line Id is : " + lineId );
+			Trace.TraceInformation( "Insert Is User Id is :" + isUserId );
+			Trace.TraceInformation( "Insert Id is :" + id );
+			
+			string insertSql = @"
+				INSERT INTO Line 
+				( LineId , Type , UserId , GroupId , PostbackStatus ) 
+				VALUES 
+				( @LineId , @Type , @UserId , @GroupId , @PostbackStatus );
+			";
+
+			Trace.TraceInformation( "Insert Line SQL is : " + insertSql );
+
+			SqlCommand insertSqlCommand = new SqlCommand( insertSql , alreadyOpenedConnection );
+			insertSqlCommand.Parameters.AddWithValue( "@LineId" , lineId );
+			insertSqlCommand.Parameters.AddWithValue( "@Type" , ( isUserId ? 0 : 1 ) );
+			insertSqlCommand.Parameters.AddWithValue( "@UserId" , ( isUserId ? id : "" ) );
+			insertSqlCommand.Parameters.AddWithValue( "@GroupId" , ( isUserId ? "" : id ) );
+			insertSqlCommand.Parameters.AddWithValue( "@PostbackStatus" , 0 );
+
+			int result = 0;
+			try {
+				Trace.TraceInformation( "SQL Execute" );
+				result = insertSqlCommand.ExecuteNonQuery();
+			}
+			catch( InvalidCastException e ) {
+				Trace.TraceError( "Insert Line Invalid Cast Exception : " + e.Message );
+			}
+			catch( SqlException e ) {
+				Trace.TraceError( "Insert Line Sql Exception : " + e.Message );
+			}
+			catch( IOException e ) {
+				Trace.TraceError( "Insert Line IOException : " + e.Message );
+			}
+			catch( ObjectDisposedException e ) {
+				Trace.TraceError( "Insert Line Object Disposed Exception : " + e.Message );
+			}
+			catch( InvalidOperationException e ) {
+				Trace.TraceError( "Insert Line Invalid Operation Exception : " + e.Message );
+			}
+			catch( Exception e ) {
+				Trace.TraceError( "Insert Line 予期せぬ例外 : " + e.Message );
+			}
+			
+			Trace.TraceInformation( "Inser Result is : " + result );
+
+			Trace.TraceInformation( "Insert Line End" );
+
+		}
+
+		/// <summary>
+		/// Postbackを取得する
+		/// メソッド内でSqlConnection.Close()はしない
+		/// </summary>
+		/// <param name="alreadyOpenedConnection">既にSqlConnection.Open()が呼ばれているコネクション</param>
+		/// <param name="isUserId">idがユーザIDかどうか</param>
+		/// <param name="id">ユーザIDまたはグループID</param>
+		/// <returns>PostbackStatus</returns>
+		private bool GetPostback( SqlConnection alreadyOpenedConnection , bool isUserId , string id ) {
+
+			Trace.TraceInformation( "Get Postback Start" );
+
+			Trace.TraceInformation( "Get Postback Id is : " + id );
+			Trace.TraceInformation( "Get Postback Is User Id is :" + isUserId );
+
+			string selectSql = @"
+				SELECT Line.PostbackStatus as Status
+				FROM Line
+				WHERE " + this.GetWhereUserIdOrGroupId( isUserId , id ) + ";";
+
+			Trace.TraceInformation( "Get Postback SQL is : " + selectSql );
+
+			SqlCommand selectSqlCommand = new SqlCommand( selectSql , alreadyOpenedConnection );
+			if( isUserId )
+				selectSqlCommand.Parameters.AddWithValue( "@UserId" , id );
+			else
+				selectSqlCommand.Parameters.AddWithValue( "@GroupId" , id );
+			
+			Trace.TraceInformation( "SQL Execute" );
+			SqlDataReader reader = null;
+			bool postbackStatus = false;
+			try {
+				reader = selectSqlCommand.ExecuteReader();
+				while( reader.Read() == true ) {
+					int? status = reader[ "Status" ] as int?;
+					postbackStatus = status.HasValue ? status.Value == 1 : false;
+					break;
+				}
+			}
+			catch( InvalidCastException e ) {
+				Trace.TraceError( "Get Max Line Id Invalid Cast Exception : " + e.Message );
+				reader?.Close();
+			}
+			catch( SqlException e ) {
+				Trace.TraceError( "Get Max Line Id Sql Exception : " + e.Message );
+				reader?.Close();
+			}
+			catch( ObjectDisposedException e ) {
+				Trace.TraceError( "Get Max Line Id Object Disposed Exception : " + e.Message );
+				reader?.Close();
+			}
+			catch( InvalidOperationException e ) {
+				Trace.TraceError( "Get Max Line Id Invalid Operation Exception : " + e.Message );
+				reader?.Close();
+			}
+			catch( IOException e ) {
+				Trace.TraceError( "Get Max Line Id IOException : " + e.Message );
+				reader?.Close();
+			}
+			catch( Exception e ) {
+				Trace.TraceError( "Get Max Line Id 予期せぬ例外 : " + e.Message );
+				reader?.Close();
+			}
+			
+			Trace.TraceInformation( "Postback is : " + postbackStatus );
+
+			Trace.TraceInformation( "Get Postback End" );
+
+			return postbackStatus;
 
 		}
 
 		/// <summary>
 		/// Postbackを更新する
 		/// </summary>
-		/// <param name="userId">ユーザID</param>
-		/// <param name="groupId">グループID</param>
+		/// <param name="alreadyOpenedConnection">既にSqlConnection.Open()が呼ばれているコネクション</param>
+		/// <param name="isUserId">idがユーザIDかどうか</param>
+		/// <param name="id">ユーザIDまたはグループID</param>
 		/// <param name="isInitialization">初期化するかどうか</param>
-		public void UpdatePostback( string userId , string groupId , bool isInitialization ) {
-
-			Trace.TraceInformation( "Postbackの更新" );
+		private void UpdatePostback( SqlConnection alreadyOpenedConnection , bool isUserId , string id , bool isInitialization ) {
 			
-			SqlConnection connection = null;
+			Trace.TraceInformation( "Update Postback Start" );
+
+			Trace.TraceInformation( "Update Postback Is User Id : " + isUserId );
+			Trace.TraceInformation( "Update Postback Id is : " + id );
+			Trace.TraceInformation( "Update Postback Is Initialization is : " + isInitialization );
+
+			string updateSql = @"
+				UPDATE Line
+				SET Line.PostbackStatus = @Status
+				WHERE " + this.GetWhereUserIdOrGroupId( isUserId , id ) + ";";
+
+			Trace.TraceInformation( "Update Postback SQL is : " + updateSql );
+			
+			SqlCommand updateSqlCommand = new SqlCommand( updateSql , alreadyOpenedConnection );
+			updateSqlCommand.Parameters.AddWithValue( "@Status" , isInitialization ? 0 : 1 );
+			if( isUserId )
+				updateSqlCommand.Parameters.AddWithValue( "@UserId" , id );
+			else
+				updateSqlCommand.Parameters.AddWithValue( "@GroupId" , id );
+
+			Trace.TraceInformation( "SQL Execute" );
+
+			int resultRowCount = 0;
 			try {
-
-				connection = new SqlConnection( this.connectionString );
-				connection.Open();
-				Trace.TraceInformation( "Connection Open" );
-
-				string updateSql =
-					"UPDATE Line " +
-					"SET Line.PostbackStatus = @Status " +
-					"WHERE " + ( !string.IsNullOrEmpty( userId ) ? "CONVERT( VARCHAR , Line.UserId ) = CONVERT( VARCHAR , @UserId ) " : "CONVERT( VARCHAR , Line.GroupId ) = CONVERT( VARCHAR , @GroupId ) " ) +
-					";";
-				Trace.TraceInformation( "Update Postback SQL is : " + updateSql );
-				
-				SqlCommand selectSqlCommand = new SqlCommand( updateSql , connection );
-				selectSqlCommand.Parameters.AddWithValue( "@Status" , isInitialization ? 0 : 1 );
-				if( !string.IsNullOrEmpty( userId ) ) {
-					selectSqlCommand.Parameters.AddWithValue( "@UserId" , userId );
-					Trace.TraceInformation( "UserId is : " + userId );
-				}
-				else {
-					selectSqlCommand.Parameters.AddWithValue( "@GroupId" , groupId );
-					Trace.TraceInformation( "GroupId is : " + groupId );
-				}
-				Trace.TraceInformation( "SQL Execute" );
-				int resultRowCount = selectSqlCommand.ExecuteNonQuery();
-
-				Trace.TraceInformation( "Update Count is : " + resultRowCount );
-
-				connection.Close();
-
+				resultRowCount = updateSqlCommand.ExecuteNonQuery();
+			}
+			catch( InvalidCastException e ) {
+				Trace.TraceError( "Update Postback Invalid Cast Exception : " + e.Message );
+			}
+			catch( SqlException e ) {
+				Trace.TraceError( "Update Postback Sql Exception : " + e.Message );
+			}
+			catch( IOException e ) {
+				Trace.TraceError( "Update Postback IOException : " + e.Message );
+			}
+			catch( ObjectDisposedException e ) {
+				Trace.TraceError( "Update Postback Object Disposed Exception : " + e.Message );
+			}
+			catch( InvalidOperationException e ) {
+				Trace.TraceError( "Update Postback Invalid Operation Exception : " + e.Message );
 			}
 			catch( Exception e ) {
-				connection?.Close();
-				Trace.TraceInformation( "DB Error : " + e.Message );
+				Trace.TraceError( "Update Postback 予期せぬ例外 : " + e.Message );
 			}
+			
+			Trace.TraceInformation( "Update Postback Count is : " + resultRowCount );
+			
+			Trace.TraceInformation( "Update Postback End" );
 
 		}
-		
+
 		/// <summary>
-		/// 最もよく撮られた人の画像と回数を返す
+		/// PictureIdの最大値を取得する
 		/// </summary>
-		/// <param name="userId">ユーザID</param>
-		/// <param name="groupId">グループID</param>
-		/// <param name="url1">URL</param>
-		/// <param name="count1">回数</param>
-		/// <param name="url2">URL</param>
-		/// <param name="count2">回数</param>
-		/// <param name="url3">URL</param>
-		/// <param name="count3">回数</param>
-		public void GetMostPhotographed(
-			string userId ,
-			string groupId ,
-			ref string url1 ,
-			ref int count1 ,
-			ref string url2 ,
-			ref int count2 ,
-			ref string url3 ,
-			ref int count3
-		) {
+		/// <param name="alreadyOpenedConnection">既にSqlConnection.Open()が呼ばれているコネクション</param>
+		/// <returns>PictureIdの最大値</returns>
+		private int GetMaxPictureId( SqlConnection alreadyOpenedConnection ) {
 
-			Trace.TraceInformation( "最もよく撮られた人取得" );
+			Trace.TraceInformation( "Get Max Picture Id Start" );
 
-			SqlConnection connection = null;
+			int maxPictureId = -1;
+
+			string selectSql = @"
+				SELECT TOP( 1 ) Picture.PictureId as PictureId
+				FROM Picture
+				ORDER BY Picture.PictureId DESC;";					
+			Trace.TraceInformation( "Get Max Picture Id SQL is : " + selectSql );
+
+			SqlCommand selectSqlCommand = new SqlCommand( selectSql , alreadyOpenedConnection );
+
+			Trace.TraceInformation( "SQL Execute" );
+			SqlDataReader reader = null;
 			try {
-
-				// TODO Face.Idだと一人ずつしか取得できない
-				// Face APIを使ってグルーピングしてそれに当てはまる人を数えないと意味ない
-
-				connection = new SqlConnection( this.connectionString );
-				connection.Open();
-				Trace.TraceInformation( "Connection Open" );
-
-				string mostPhotographedSql =
-					"SELECT TOP( 3 ) COUNT( Face.Id ) as Count , Face.ProcessedPicturePath as Path " +
-					"FROM Face " +
-					"INNER JOIN Picture " +
-					"ON Face.PictureId = Picture.PictureId " +
-					"INNER JOIN Line " +
-					"ON Picture.LineId = Line.LineId " +
-					"WHERE " + ( !string.IsNullOrEmpty( userId ) ? "CONVERT( VARCHAR , Line.UserId ) = CONVERT( VARCHAR , @UserId ) " : "CONVERT( VARCHAR , Line.GroupId ) = CONVERT( VARCHAR , @GroupId ) " ) +
-					"GROUP BY Face.Id , Face.ProcessedPicturePath " +
-					";";
-				Trace.TraceInformation( "Most Photographed Sql is : " + mostPhotographedSql );
-
-				SqlCommand selectSqlCommand = new SqlCommand( mostPhotographedSql , connection );
-				if( !string.IsNullOrEmpty( userId ) ) {
-					selectSqlCommand.Parameters.AddWithValue( "@UserId" , userId );
-					Trace.TraceInformation( "User Id is : " + userId );
+				reader = selectSqlCommand.ExecuteReader();
+				while( reader.Read() == true ) {
+					int? readerLineId = reader[ "PictureId" ] as int?;
+					maxPictureId = readerLineId.GetValueOrDefault( -1 );
+					break;
 				}
-				else {
-					selectSqlCommand.Parameters.AddWithValue( "@GroupId" , groupId );
-					Trace.TraceInformation( "Group Id is : " + groupId );
-				}
-
-				Trace.TraceInformation( "SQL Execute" );
-				using( SqlDataReader reader = selectSqlCommand.ExecuteReader() ) {
-					int index = 0;
-					while( reader.Read() == true ) {
-
-						if( index == 0 ) {
-							url1 = reader[ "Path" ] as string;
-							int? count = reader[ "Count" ] as int?;
-							count1 = count.HasValue ? count.Value : 0;
-						}
-						else if( index == 1 ) {
-							url2 = reader[ "Path" ] as string;
-							int? count = reader[ "Count" ] as int?;
-							count2 = count.HasValue ? count.Value : 0;
-						}
-						else if( index == 2 ) {
-							url3 = reader[ "Path" ] as string;
-							int? count = reader[ "Count" ] as int?;
-							count3 = count.HasValue ? count.Value : 0;
-							break;
-						}
-
-						index++;
-
-					}
-
-				}
-
-				Trace.TraceInformation( "Url1 is : " + url1 );
-				Trace.TraceInformation( "Url2 is : " + url2 );
-				Trace.TraceInformation( "Url3 is : " + url3 );
-				Trace.TraceInformation( "Count1 is : " + count1 );
-				Trace.TraceInformation( "Count2 is : " + count2 );
-				Trace.TraceInformation( "Count3 is : " + count3 );
-
-				connection.Close();
-
+				reader.Close();
+			}
+			catch( InvalidCastException e ) {
+				Trace.TraceError( "Get Max Picture Id Invalid Cast Exception : " + e.Message );
+				reader?.Close();
+			}
+			catch( SqlException e ) {
+				Trace.TraceError( "Get Max Picture Id Sql Exception : " + e.Message );
+				reader?.Close();
+			}
+			catch( ObjectDisposedException e ) {
+				Trace.TraceError( "Get Max Picture Id Object Disposed Exception : " + e.Message );
+				reader?.Close();
+			}
+			catch( InvalidOperationException e ) {
+				Trace.TraceError( "Get Max Picture Id Invalid Operation Exception : " + e.Message );
+				reader?.Close();
+			}
+			catch( IOException e ) {
+				Trace.TraceError( "Get Max Picture Id IOException : " + e.Message );
+				reader?.Close();
 			}
 			catch( Exception e ) {
-				connection?.Close();
-				Trace.TraceInformation( "DB Error : " + e.Message );
+				Trace.TraceError( "Get Max Picture Id 予期せぬ例外 : " + e.Message );
+				reader?.Close();
+			}
+
+			Trace.TraceInformation( "Max Picture Id is : " + maxPictureId );
+
+			Trace.TraceInformation( "Get Max Picture Id End" );
+
+			return maxPictureId;
+			
+		}
+
+		/// <summary>
+		/// 画像を登録する
+		/// </summary>
+		/// <param name="alreadyOpenedConnection">既にSqlConnection.Open()が呼ばれているコネクション</param>
+		/// <param name="isUserId">idがユーザIDかどうか</param>
+		/// <param name="pictureId">PictureID</param>
+		/// <param name="path">画像URL</param>
+		/// <param name="lineId">LineId</param>
+		private void InsertPicture( SqlConnection alreadyOpenedConnection , int pictureId , string path , int lineId ) {
+
+			Trace.TraceInformation( "Insert Picture Start" );
+
+			Trace.TraceInformation( "Inser Picture Picture Id is : " + pictureId );
+			Trace.TraceInformation( "Insert Picture Path is : " + path );
+
+			string insertSql = @"
+				INSERT INTO Picture 
+				( PictureId , OriginalUrl , LineId ) 
+				VALUES 
+				( @PictureId , @OriginalUrl , @LineId );";
+			Trace.TraceInformation( "Inser Picture SQL is : " + insertSql );
+
+			SqlCommand insertSqlCommand = new SqlCommand( insertSql , alreadyOpenedConnection );
+			insertSqlCommand.Parameters.AddWithValue( "@PictureId" , pictureId );
+			insertSqlCommand.Parameters.AddWithValue( "@OriginalUrl" , path );
+			insertSqlCommand.Parameters.AddWithValue( "@LineId" , lineId );
+
+			Trace.TraceInformation( "SQL Execute" );
+			try {
+				insertSqlCommand.ExecuteNonQuery();
+			}
+			catch( InvalidCastException e ) {
+				Trace.TraceError( "Insert Picture Invalid Cast Exception : " + e.Message );
+			}
+			catch( SqlException e ) {
+				Trace.TraceError( "Insert Picture Sql Exception : " + e.Message );
+			}
+			catch( IOException e ) {
+				Trace.TraceError( "Insert Picture IOException : " + e.Message );
+			}
+			catch( ObjectDisposedException e ) {
+				Trace.TraceError( "Insert Picture Object Disposed Exception : " + e.Message );
+			}
+			catch( InvalidOperationException e ) {
+				Trace.TraceError( "Insert Picture Invalid Operation Exception : " + e.Message );
+			}
+			catch( Exception e ) {
+				Trace.TraceError( "Insert Picture 予期せぬ例外 : " + e.Message );
 			}
 			
+			Trace.TraceInformation( "Insert Picture End" );
+			
+		}
+
+		/// <summary>
+		/// FaceIdの最大値を取得する
+		/// </summary>
+		/// <param name="alreadyOpenedConnection">既にSqlConnection.Open()が呼ばれているコネクション</param>
+		/// <returns>FaceIdの最大値</returns>
+		private int GetMaxFaceId( SqlConnection alreadyOpenedConnection ) {
+
+			Trace.TraceInformation( "Get Max Face Id Start" );
+
+			int maxFaceId = -1;
+
+			string selectSql = @"
+				SELECT Face.Id as Id
+				FROM Face
+				ORDER BY Face.Id DESC;";
+
+			Trace.TraceInformation( "Get Max Face Id SQL is : " + selectSql );
+
+			SqlCommand selectSqlCommand = new SqlCommand( selectSql , alreadyOpenedConnection );
+
+			Trace.TraceInformation( "SQL Execute" );
+			SqlDataReader reader = null;
+			try {
+				reader = selectSqlCommand.ExecuteReader();
+				while( reader.Read() == true ) {
+					int? readerLineId = reader[ "Id" ] as int?;
+					maxFaceId = readerLineId.GetValueOrDefault( -1 );
+					break;
+				}
+				reader.Close();
+			}
+			catch( InvalidCastException e ) {
+				Trace.TraceError( "Get Max Face Id Invalid Cast Exception : " + e.Message );
+				reader?.Close();
+			}
+			catch( SqlException e ) {
+				Trace.TraceError( "Get Max Face Id Sql Exception : " + e.Message );
+				reader?.Close();
+			}
+			catch( ObjectDisposedException e ) {
+				Trace.TraceError( "Get Max Face Id Object Disposed Exception : " + e.Message );
+				reader?.Close();
+			}
+			catch( InvalidOperationException e ) {
+				Trace.TraceError( "Get Max Face Id Invalid Operation Exception : " + e.Message );
+				reader?.Close();
+			}
+			catch( IOException e ) {
+				Trace.TraceError( "Get Max Face Id IOException : " + e.Message );
+				reader?.Close();
+			}
+			catch( Exception e ) {
+				Trace.TraceError( "Get Max Face Id 予期せぬ例外 : " + e.Message );
+				reader?.Close();
+			}
+
+			Trace.TraceInformation( "Max Face Id is : " + maxFaceId );
+
+			Trace.TraceInformation( "Get Max Face Id End" );
+
+			return maxFaceId;
+			
+		}
+
+		/// <summary>
+		/// Face登録
+		/// </summary>
+		/// <param name="alreadyOpenedConnection">既にSqlConnection.Open()が呼ばれているコネクション</param>
+		/// <param name="id">管理番号</param>
+		/// <param name="faceId">FaceId</param>
+		/// <param name="response">Emotion API - Recognitionのレスポンス</param>
+		/// <param name="pictureId">PictureId</param>
+		/// <param name="path">画像パス</param>
+		private void InsertFace( SqlConnection alreadyOpenedConnection , int id , string faceId , ResponseOfEmotionRecognitionAPI response , int pictureId , string path ) {
+
+			Trace.TraceInformation( "Insert Face Start" );
+			string insertSql = @"
+				INSERT INTO Face
+				( Id , FaceId , TopPos , LeftPos , Height , Width , Anger , Contempt , Disgust , Fear , Happiness , Neutral , Sadness , Surprise , PictureId , ProcessedPicturePath )
+				VALUES 
+				( @Id , @FaceId , @TopPos , @LeftPos , @Height , @Width , @Anger , @Contempt , @Disgust , @Fear , @Happiness , @Neutral , @Sadness , @Surprise , @PictureId , @ProcessedPicturePath );";
+			Trace.TraceInformation( "Insert Face Sql is : " + insertSql );
+
+			SqlCommand insertSqlCommand = new SqlCommand( insertSql , alreadyOpenedConnection );
+			insertSqlCommand.Parameters.AddWithValue( "@Id" , id );
+			insertSqlCommand.Parameters.AddWithValue( "@FaceId" , faceId );
+			insertSqlCommand.Parameters.AddWithValue( "@TopPos" , response.faceRectangle.top );
+			insertSqlCommand.Parameters.AddWithValue( "@LeftPos" , response.faceRectangle.left );
+			insertSqlCommand.Parameters.AddWithValue( "@Height" , response.faceRectangle.height );
+			insertSqlCommand.Parameters.AddWithValue( "@Width" , response.faceRectangle.width );
+			insertSqlCommand.Parameters.AddWithValue( "@Anger" , response.scores.anger );
+			insertSqlCommand.Parameters.AddWithValue( "@Contempt" , response.scores.contempt );
+			insertSqlCommand.Parameters.AddWithValue( "@Disgust" , response.scores.disgust );
+			insertSqlCommand.Parameters.AddWithValue( "@Fear" , response.scores.fear );
+			insertSqlCommand.Parameters.AddWithValue( "@Happiness" , response.scores.happiness );
+			insertSqlCommand.Parameters.AddWithValue( "@Neutral" , response.scores.neutral );
+			insertSqlCommand.Parameters.AddWithValue( "@Sadness" , response.scores.sadness );
+			insertSqlCommand.Parameters.AddWithValue( "@Surprise" , response.scores.surprise );
+			insertSqlCommand.Parameters.AddWithValue( "@PictureId" , pictureId );
+			insertSqlCommand.Parameters.AddWithValue( "@ProcessedPicturePath" , path );
+
+			Trace.TraceInformation( "SQL Execute" );
+			try {
+				insertSqlCommand.ExecuteNonQuery();
+			}
+			catch( InvalidCastException e ) {
+				Trace.TraceError( "Insert Face Invalid Cast Exception : " + e.Message );
+			}
+			catch( SqlException e ) {
+				Trace.TraceError( "Insert Face Sql Exception : " + e.Message );
+			}
+			catch( IOException e ) {
+				Trace.TraceError( "Insert Face IOException : " + e.Message );
+			}
+			catch( ObjectDisposedException e ) {
+				Trace.TraceError( "Insert Face Object Disposed Exception : " + e.Message );
+			}
+			catch( InvalidOperationException e ) {
+				Trace.TraceError( "Insert Face Invalid Operation Exception : " + e.Message );
+			}
+			catch( Exception e ) {
+				Trace.TraceError( "Insert Face 予期せぬ例外 : " + e.Message );
+			}
+
+			Trace.TraceInformation( "Insert Face End" );
+
+		}
+
+		/// <summary>
+		/// 顔IDリスト取得
+		/// </summary>
+		/// <param name="alreadyOpenedConnection">既にSqlConnection.Open()が呼ばれているコネクション</param>
+		/// <param name="isUserId">idがユーザIDかどうか</param>
+		/// <param name="id">ユーザIDまたはグループID</param>
+		/// <returns>顔IDリスト</returns>
+		private List<string> GetFaceIds( SqlConnection alreadyOpenedConnection , bool isUserId , string id ) {
+
+			Trace.TraceInformation( "Get Face Ids Start" );
+			string selectSql = @"
+				SELECT Face.FaceId as Id
+				FROM Face
+				INNER JOIN Picture
+				ON Face.PictureId = Picture.PictureId
+				INNER JOIN Line
+				ON Picture.LineId = Line.LineId
+				WHERE " + this.GetWhereUserIdOrGroupId( isUserId , id ) + @" ;";
+			Trace.TraceInformation( "Get Face Sql is : " + selectSql );
+
+			SqlCommand selectSqlCommand = new SqlCommand( selectSql , alreadyOpenedConnection );
+			if( isUserId )
+				selectSqlCommand.Parameters.AddWithValue( "@UserId" , id );
+			else
+				selectSqlCommand.Parameters.AddWithValue( "@GroupId" , id );
+
+			Trace.TraceInformation( "SQL Execute" );
+			SqlDataReader reader = null;
+			List<string> ids = new List<string>();
+			try {
+				reader = selectSqlCommand.ExecuteReader();
+				while( reader.Read() == true ) {
+					string readerFaceId = reader[ "Id" ] as string;
+					Trace.TraceInformation( "Get Face Id is : " + readerFaceId );
+					ids.Add( readerFaceId );
+				}
+				reader.Close();
+			}
+			catch( InvalidCastException e ) {
+				Trace.TraceError( "Get Face Ids Invalid Cast Exception : " + e.Message );
+				reader?.Close();
+			}
+			catch( SqlException e ) {
+				Trace.TraceError( "Get Face Ids Sql Exception : " + e.Message );
+				reader?.Close();
+			}
+			catch( ObjectDisposedException e ) {
+				Trace.TraceError( "Get Face Ids Object Disposed Exception : " + e.Message );
+				reader?.Close();
+			}
+			catch( InvalidOperationException e ) {
+				Trace.TraceError( "Get Face Ids Invalid Operation Exception : " + e.Message );
+				reader?.Close();
+			}
+			catch( IOException e ) {
+				Trace.TraceError( "Get Face Ids IOException : " + e.Message );
+				reader?.Close();
+			}
+			catch( Exception e ) {
+				Trace.TraceError( "Get Face Ids 予期せぬ例外 : " + e.Message );
+				reader?.Close();
+			}
+			
+			Trace.TraceInformation( "Get Face Ids End" );
+
+			return ids;
+
+		}
+
+		/// <summary>
+		/// FaceIdよりURLを取得する
+		/// </summary>
+		/// <param name="alreadyOpenedConnection">既にSqlConnection.Open()が呼ばれているコネクション</param>
+		/// <param name="faceId">FaceId</param>
+		/// <returns>URL</returns>
+		private string GetFaceUrl( SqlConnection alreadyOpenedConnection , string faceId ) {
+			
+			Trace.TraceInformation( "Get Face URL Start" );
+
+			string url = "";
+
+			string selectSql = @"
+				SELECT Face.ProcessedPicturePath as Url
+				FROM Face
+				WHERE CONVERT( VARCHAR , Face.FaceId ) = CONVERT( VARCHAR , @FaceId );";
+			Trace.TraceInformation( "Get Face Url Sql is : " + selectSql );
+
+			SqlCommand selectSqlCommand = new SqlCommand( selectSql , alreadyOpenedConnection );
+			selectSqlCommand.Parameters.AddWithValue( "@FaceId" , faceId );
+
+			Trace.TraceInformation( "SQL Execute" );
+			SqlDataReader reader = null;
+			try {
+				reader = selectSqlCommand.ExecuteReader();
+				while( reader.Read() == true ) {
+					string readerUrl = reader[ "Url" ] as string;
+					Trace.TraceInformation( "Get Face Url Reader Url is : " + reader );
+					url = readerUrl;
+					break;
+				}
+				reader.Close();
+			}
+			catch( InvalidCastException e ) {
+				Trace.TraceError( "Get Face URL Invalid Cast Exception : " + e.Message );
+				reader?.Close();
+			}
+			catch( SqlException e ) {
+				Trace.TraceError( "Get Face URL Sql Exception : " + e.Message );
+				reader?.Close();
+			}
+			catch( ObjectDisposedException e ) {
+				Trace.TraceError( "Get Face URL Object Disposed Exception : " + e.Message );
+				reader?.Close();
+			}
+			catch( InvalidOperationException e ) {
+				Trace.TraceError( "Get Face URL Invalid Operation Exception : " + e.Message );
+				reader?.Close();
+			}
+			catch( IOException e ) {
+				Trace.TraceError( "Get Face URL IOException : " + e.Message );
+				reader?.Close();
+			}
+			catch( Exception e ) {
+				Trace.TraceError( "Get Face URL 予期せぬ例外 : " + e.Message );
+				reader?.Close();
+			}
+
+			Trace.TraceInformation( "Get Face Url is " + url );
+
+			Trace.TraceInformation( "Get Face URL End" );
+
+			return url;
+
 		}
 
 		/// <summary>
 		/// 最も笑顔の画像と笑顔度を返す
 		/// </summary>
-		/// <param name="userId">ユーザID</param>
-		/// <param name="groupId">グループID</param>
+		/// <param name = "alreadyOpenedConnection" > 既にSqlConnection.Open()が呼ばれているコネクション</param>
+		/// <param name="isUserId">ユーザIDかどうか</param>
+		/// <param name="id">ユーザIDかグループID</param>
 		/// <param name="url1">URL</param>
 		/// <param name="value1">笑顔度</param>
 		/// <param name="url2">URL</param>
 		/// <param name="value2">笑顔度</param>
 		/// <param name="url3">URL</param>
 		/// <param name="value3">笑顔度</param>
-		public void GetMostHappiness(
-			string userId ,
-			string groupId ,
+		private void GetMostHappiness(
+			SqlConnection alreadyOpenedConnection ,
+			bool isUserId ,
+			string id ,
 			ref string url1 ,
 			ref double value1 ,
 			ref string url2 ,
@@ -362,105 +814,120 @@ namespace LineBotCompanyTrip.Services.SQLServer {
 			ref double value3
 		) {
 
-			Trace.TraceInformation( "最も笑顔の人取得" );
-			
-			SqlConnection connection = null;
+			Trace.TraceInformation( "Get Most Happiness Start" );
+
+			Trace.TraceInformation( "Get Most Happiness Is User Id is : " + isUserId );
+			Trace.TraceInformation( "Get Most Happiness Id is : " + id );
+
+			string selectSql = @"
+				SELECT TOP( 3 ) Face.Happiness as Value , Face.ProcessedPicturePath as Path
+				FROM Face
+				Where Face.Happiness IN (
+					SELECT TOP( 3 ) MAX( Face.Happiness ) as SubValue
+					FROM Face
+					INNER JOIN Picture
+					ON Face.PictureId = Picture.PictureId
+					INNER JOIN Line
+					ON Picture.LineId = Line.LineId
+					WHERE " + this.GetWhereUserIdOrGroupId( isUserId , id ) + @"
+					GROUP BY Face.Happiness
+					ORDER BY Face.Happiness DESC
+				)
+				ORDER BY Face.Happiness DESC;";
+
+			Trace.TraceInformation( "Get Most Happiness Sql is : " + selectSql );
+
+			SqlCommand selectSqlCommand = new SqlCommand( selectSql , alreadyOpenedConnection );
+			if( isUserId )
+				selectSqlCommand.Parameters.AddWithValue( "@UserId" , id );
+			else
+				selectSqlCommand.Parameters.AddWithValue( "@GroupId" , id );
+
+			Trace.TraceInformation( "SQL Execute" );
+			SqlDataReader reader = null;
 			try {
 
-				connection = new SqlConnection( this.connectionString );
-				connection.Open();
-				Trace.TraceInformation( "Connection Open" );
+				reader = selectSqlCommand.ExecuteReader();
 
-				string mostHappinessSql =
-					"SELECT TOP( 3 ) Face.Happiness as Value , Face.ProcessedPicturePath as Path "+
-					"FROM Face " +
-					"Where Face.Happiness IN " +
-					"( " +
-					"	SELECT TOP( 3 ) MAX( Face.Happiness ) as SubValue " +
-					"	FROM Face " +
-					"	INNER JOIN Picture " +
-					"	ON Face.PictureId = Picture.PictureId " +
-					"	INNER JOIN Line " +
-					"	ON Picture.LineId = Line.LineId " +
-					"	WHERE " + ( !string.IsNullOrEmpty( userId ) ? "CONVERT( VARCHAR , Line.UserId ) = CONVERT( VARCHAR , @UserId ) " : "CONVERT( VARCHAR , Line.GroupId ) = CONVERT( VARCHAR , @GroupId ) " ) +
-					"	GROUP BY Face.Happiness " +
-					"	ORDER BY Face.Happiness DESC " +
-					") " +
-					"ORDER BY Face.Happiness DESC; ";
-				
-				Trace.TraceInformation( "Most Photographed Sql is : " + mostHappinessSql );
+				int index = 0;
+				while( reader.Read() == true ) {
 
-				SqlCommand selectSqlCommand = new SqlCommand( mostHappinessSql , connection );
-				if( !string.IsNullOrEmpty( userId ) ) {
-					selectSqlCommand.Parameters.AddWithValue( "@UserId" , userId );
-					Trace.TraceInformation( "User Id is : " + userId );
-				}
-				else {
-					selectSqlCommand.Parameters.AddWithValue( "@GroupId" , groupId );
-					Trace.TraceInformation( "Group Id is : " + groupId );
-				}
-
-				Trace.TraceInformation( "SQL Execute" );
-				using( SqlDataReader reader = selectSqlCommand.ExecuteReader() ) {
-					int index = 0;
-					while( reader.Read() == true ) {
-
-						if( index == 0 ) {
-							url1 = reader[ "Path" ] as string;
-							decimal? value = reader[ "Value" ] as decimal?;
-							value1 = value.HasValue ? (double)value.Value : 0.0;
-							Trace.TraceInformation( "Url1 is : " + url1 );
-							Trace.TraceInformation( "Value1 is : " + value1 );
-						}
-						else if( index == 1 ) {
-							url2 = reader[ "Path" ] as string;
-							decimal? value = reader[ "Value" ] as decimal?;
-							value2 = value.HasValue ? (double)value.Value : 0.0;
-							Trace.TraceInformation( "Url2 is : " + url2 );
-							Trace.TraceInformation( "Value2 is : " + value2 );
-						}
-						else if( index == 2 ) {
-							url3 = reader[ "Path" ] as string;
-							decimal? value = reader[ "Value" ] as decimal?;
-							value3 = value.HasValue ? (double)value.Value : 0.0;
-							Trace.TraceInformation( "Url3 is : " + url3 );
-							Trace.TraceInformation( "Value3 is : " + value3 );
-							break;
-						}
-
-						index++;
-
+					if( index == 0 ) {
+						url1 = reader[ "Path" ] as string;
+						decimal? value = reader[ "Value" ] as decimal?;
+						value1 = value.HasValue ? (double)value.Value : 0.0;
+						Trace.TraceInformation( "Url1 is : " + url1 );
+						Trace.TraceInformation( "Value1 is : " + value1 );
+					}
+					else if( index == 1 ) {
+						url2 = reader[ "Path" ] as string;
+						decimal? value = reader[ "Value" ] as decimal?;
+						value2 = value.HasValue ? (double)value.Value : 0.0;
+						Trace.TraceInformation( "Url2 is : " + url2 );
+						Trace.TraceInformation( "Value2 is : " + value2 );
+					}
+					else if( index == 2 ) {
+						url3 = reader[ "Path" ] as string;
+						decimal? value = reader[ "Value" ] as decimal?;
+						value3 = value.HasValue ? (double)value.Value : 0.0;
+						Trace.TraceInformation( "Url3 is : " + url3 );
+						Trace.TraceInformation( "Value3 is : " + value3 );
+						break;
 					}
 
+					index++;
+
 				}
-				
-				connection.Close();
 
 			}
-			catch( Exception e ) {
-				connection?.Close();
-				Trace.TraceInformation( "DB Error : " + e.Message );
+			catch( InvalidCastException e ) {
+				Trace.TraceError( "Get Most Happiness Invalid Cast Exception : " + e.Message );
+				reader?.Close();
 			}
+			catch( SqlException e ) {
+				Trace.TraceError( "Get Most Happiness Sql Exception : " + e.Message );
+				reader?.Close();
+			}
+			catch( ObjectDisposedException e ) {
+				Trace.TraceError( "Get Most Happiness Object Disposed Exception : " + e.Message );
+				reader?.Close();
+			}
+			catch( InvalidOperationException e ) {
+				Trace.TraceError( "Get Most Happiness Invalid Operation Exception : " + e.Message );
+				reader?.Close();
+			}
+			catch( IOException e ) {
+				Trace.TraceError( "Get Most Happiness IOException : " + e.Message );
+				reader?.Close();
+			}
+			catch( Exception e ) {
+				Trace.TraceError( "Get Most Happiness 予期せぬ例外 : " + e.Message );
+				reader?.Close();
+			}
+			
+			Trace.TraceInformation( "Get Most Happiness End" );
 
 		}
 
 		/// <summary>
-		/// 最も表情豊かな画像と表情種別と表情度を返す
+		/// 最も表情豊かな画像のURLと表情種別と表情度を返す
 		/// </summary>
-		/// <param name="userId">ユーザID</param>
-		/// <param name="groupId">グループID</param>
+		/// <param name = "alreadyOpenedConnection" > 既にSqlConnection.Open()が呼ばれているコネクション</param>
+		/// <param name="isUserId">ユーザIDかどうか</param>
+		/// <param name="id">ユーザIDかグループID</param>
 		/// <param name="url1">URL</param>
-		/// <param name="type1">表情種別</param>
-		/// <param name="value1">表情度</param>
+		/// <param name="type1">種別</param>
+		/// <param name="value1">笑顔度</param>
 		/// <param name="url2">URL</param>
-		/// <param name="type2">表情種別</param>
-		/// <param name="value2">表情度</param>
+		/// <param name="type2">種別</param>
+		/// <param name="value2">笑顔度</param>
 		/// <param name="url3">URL</param>
-		/// <param name="type3">表情種別</param>
-		/// <param name="value3">表情度</param>
-		public void GetMostEmotion(
-			string userId ,
-			string groupId ,
+		/// <param name="type3">種別</param>
+		/// <param name="value3">笑顔度</param>
+		private void GetMostEmotion(
+			SqlConnection alreadyOpenedConnection ,
+			bool isUserId ,
+			string id ,
 			ref string url1 ,
 			ref CommonEnum.EmotionType type1 ,
 			ref double value1 ,
@@ -472,7 +939,243 @@ namespace LineBotCompanyTrip.Services.SQLServer {
 			ref double value3
 		) {
 
-			Trace.TraceInformation( "最も表情豊かな人取得" );
+			Trace.TraceInformation( "Get Most Emotion Start" );
+
+			Trace.TraceInformation( "Get Most Emotion Is User Id is : " + isUserId );
+			Trace.TraceInformation( "Get Most Emotion Id is : " + id );
+
+			string selectSql = @"
+				SELECT TOP( 3 ) SubQuery.Path as Path , SubQuery.Value as Value , SubQuery.Type as Type
+				FROM(
+					( " +　this.GetSubQueryOfMostEmotion( "Anger" , isUserId , id ) + @" )
+					UNION ALL
+					( " + this.GetSubQueryOfMostEmotion( "Contempt" , isUserId , id ) + @" )
+					UNION ALL
+					( " + this.GetSubQueryOfMostEmotion( "Disgust" , isUserId , id ) + @" )
+					UNION ALL
+					( " + this.GetSubQueryOfMostEmotion( "Fear" , isUserId , id ) + @" )
+					UNION ALL
+					( " + this.GetSubQueryOfMostEmotion( "Happiness" , isUserId , id ) + @" )
+					UNION ALL
+					( " + this.GetSubQueryOfMostEmotion( "Sadness" , isUserId , id ) + @" )
+					UNION ALL
+					( " + this.GetSubQueryOfMostEmotion( "Surprise" , isUserId , id ) + @" )
+				) SubQuery
+				ORDER BY Value DESC
+				;";
+
+			Trace.TraceInformation( "Get Most Emotion Sql is : " + selectSql );
+
+			SqlCommand selectSqlCommand = new SqlCommand( selectSql , alreadyOpenedConnection );
+			if( isUserId )
+				selectSqlCommand.Parameters.AddWithValue( "@UserId" , id );
+			else
+				selectSqlCommand.Parameters.AddWithValue( "@GroupId" , id );
+
+			Trace.TraceInformation( "SQL Execute" );
+			SqlDataReader reader = null;
+			try {
+
+				reader = selectSqlCommand.ExecuteReader();
+
+				int index = 0;
+				while( reader.Read() == true ) {
+
+					if( index == 0 ) {
+						url1 = reader[ "Path" ] as string;
+						decimal? value = reader[ "Value" ] as decimal?;
+						value1 = value.HasValue ? (double)value.Value : 0.0;
+						type1 = CommonUtil.ConvertEmotionStringIntoType( reader[ "Type" ] as string );
+						Trace.TraceInformation( "Url1 is : " + url1 );
+						Trace.TraceInformation( "Value1 is : " + value1 );
+						Trace.TraceInformation( "Type1 is : " + type1 );
+					}
+					else if( index == 1 ) {
+						url2 = reader[ "Path" ] as string;
+						decimal? value = reader[ "Value" ] as decimal?;
+						value2 = value.HasValue ? (double)value.Value : 0.0;
+						type2 = CommonUtil.ConvertEmotionStringIntoType( reader[ "Type" ] as string );
+						Trace.TraceInformation( "Url1 is : " + url2 );
+						Trace.TraceInformation( "Value1 is : " + value2 );
+						Trace.TraceInformation( "Type1 is : " + type2 );
+					}
+					else if( index == 2 ) {
+						url3 = reader[ "Path" ] as string;
+						decimal? value = reader[ "Value" ] as decimal?;
+						value3 = value.HasValue ? (double)value.Value : 0.0;
+						type3 = CommonUtil.ConvertEmotionStringIntoType( reader[ "Type" ] as string );
+						Trace.TraceInformation( "Url1 is : " + url3 );
+						Trace.TraceInformation( "Value1 is : " + value3 );
+						Trace.TraceInformation( "Type1 is : " + type3 );
+						break;
+					}
+
+					index++;
+
+				}
+
+			}
+			catch( InvalidCastException e ) {
+				Trace.TraceError( "Get Most Emotion Invalid Cast Exception : " + e.Message );
+				reader?.Close();
+			}
+			catch( SqlException e ) {
+				Trace.TraceError( "Get Most Emotion Sql Exception : " + e.Message );
+				reader?.Close();
+			}
+			catch( ObjectDisposedException e ) {
+				Trace.TraceError( "Get Most Emotion Object Disposed Exception : " + e.Message );
+				reader?.Close();
+			}
+			catch( InvalidOperationException e ) {
+				Trace.TraceError( "Get Most Emotion Invalid Operation Exception : " + e.Message );
+				reader?.Close();
+			}
+			catch( IOException e ) {
+				Trace.TraceError( "Get Most Emotion IOException : " + e.Message );
+				reader?.Close();
+			}
+			catch( Exception e ) {
+				Trace.TraceError( "Get Most Emotion 予期せぬ例外 : " + e.Message );
+				reader?.Close();
+			}
+
+			Trace.TraceInformation( "Get Most Emotion End" );
+
+		}
+
+		/// <summary>
+		/// LINE情報の登録
+		/// </summary>
+		/// <param name="id">ユーザIDもしくはグループID</param>
+		/// <param name="isUserId">ユーザIDかどうか</param>
+		/// <returns>LINEID</returns>
+		public void RegistLine( string id , bool isUserId ) {
+
+			Trace.TraceInformation( "Regist Line Start" );
+			
+			Trace.TraceInformation( "Id is : " + id );
+			Trace.TraceInformation( "Is User Id : " + isUserId );
+			
+			SqlConnection connection = null;
+			try {
+
+				connection = new SqlConnection( this.connectionString );
+				connection.Open();
+				Trace.TraceInformation( "Connection Open" );
+
+				int maxLineId = this.GetMaxLineId( connection );
+
+				this.InsertLine( connection , maxLineId + 1 , isUserId , id );
+
+				connection.Close();
+				Trace.TraceInformation( "Connection Close" );
+
+			}
+			catch( InvalidCastException e ) {
+				Trace.TraceError( "Regist Line Invalid Cast Exception : " + e.Message );
+				connection?.Close();
+				Trace.TraceInformation( "Connection Close" );
+			}
+			catch( SqlException e ) {
+				Trace.TraceError( "Regist Line Sql Exception : " + e.Message );
+				connection?.Close();
+				Trace.TraceInformation( "Connection Close" );
+			}
+			catch( ConfigurationErrorsException e ) {
+				Trace.TraceError( "Regist Line Configuration Errors Exception : " + e.Message );
+				connection?.Close();
+				Trace.TraceInformation( "Connection Close" );
+			}
+			catch( Exception e ) {
+				Trace.TraceInformation( "Regist Line 予期せぬ例外 : " + e.Message );
+				connection?.Close();
+				Trace.TraceInformation( "Connection Close" );
+			}
+
+			Trace.TraceInformation( "Regist Line End" );
+
+		}
+
+		/// <summary>
+		/// LINE情報の削除
+		/// </summary>
+		/// <param name="id">ユーザIDもしくはグループID</param>
+		/// <param name="isUserId">ユーザIDかどうか</param>
+		/// <returns>LINEID</returns>
+		public void LeaveLine( string id , bool isUserId ) {
+
+			Trace.TraceInformation( "Leave Line Start" );
+
+			Trace.TraceInformation( "Leave Line End" );
+
+		}
+
+		/// <summary>
+		/// Postbackが初期状態かどうか判断
+		/// </summary>
+		/// <param name="isUserId">idがユーザIDかどうか</param>
+		/// <param name="id">ユーザIDまたはグループID</param>
+		/// <returns>初期化状態かどうか</returns>
+		public bool IsPostbackInitialization( bool isUserId , string id ) {
+
+			Trace.TraceInformation( "Is Postback Initialization Start" );
+
+			Trace.TraceInformation( "Is Postback Initialization Is User Id : " + isUserId );
+			Trace.TraceInformation( "Is Postback Initialization Id is : " + id );
+
+			bool isInitialization = true;
+			SqlConnection connection = null;
+			try {
+
+				connection = new SqlConnection( this.connectionString );
+				connection.Open();
+				Trace.TraceInformation( "Connection Open" );
+
+				isInitialization = this.GetPostback( connection , isUserId , id );
+
+				connection.Close();
+				Trace.TraceInformation( "Connection Close" );
+
+			}
+			catch( InvalidCastException e ) {
+				Trace.TraceError( "Is Postback Initialization Invalid Cast Exception : " + e.Message );
+				connection?.Close();
+				Trace.TraceInformation( "Connection Close" );
+			}
+			catch( SqlException e ) {
+				Trace.TraceError( "Is Postback Initialization Sql Exception : " + e.Message );
+				connection?.Close();
+				Trace.TraceInformation( "Connection Close" );
+			}
+			catch( ConfigurationErrorsException e ) {
+				Trace.TraceError( "Is Postback Initialization Configuration Errors Exception : " + e.Message );
+				connection?.Close();
+				Trace.TraceInformation( "Connection Close" );
+			}
+			catch( Exception e ) {
+				Trace.TraceInformation( "Is Postback Initialization 予期せぬ例外 : " + e.Message );
+				connection?.Close();
+				Trace.TraceInformation( "Connection Close" );
+			}
+			
+			return isInitialization;
+
+		}
+		
+		/// <summary>
+		/// Postbackを更新する
+		/// </summary>
+		/// <param name="userId">ユーザIDかどうか</param>
+		/// <param name="groupId">ユーザIDまたはグループID</param>
+		/// <param name="isInitialization">初期化するかどうか</param>
+		public void UpdatePostback( bool isUserId , string id , bool isInitialization ) {
+			
+			Trace.TraceInformation( "Update Postback Start" );
+
+			Trace.TraceInformation( "Update Postback Is User Id : " + isUserId );
+			Trace.TraceInformation( "Update Postback Id is : " + id );
+			Trace.TraceInformation( "Update Postback Is Initialization is : " + isInitialization );
 
 			SqlConnection connection = null;
 			try {
@@ -481,306 +1184,96 @@ namespace LineBotCompanyTrip.Services.SQLServer {
 				connection.Open();
 				Trace.TraceInformation( "Connection Open" );
 
-				string mostEmotionSql =
-					@"SELECT TOP( 3 ) SubQuery.Path as Path , SubQuery.Value as Value , SubQuery.Type as Type " +
-					"FROM( " +
-					"	( " +
-					"		SELECT TOP( 3 ) Face.ProcessedPicturePath as Path , Face.Anger as Value , 'Anger' as Type " +
-					"		FROM Face " +
-					"		WHERE Face.Anger IN( " +
-					"			SELECT TOP( 3 ) MAX( Face.Anger ) as Value " +
-					"			FROM Face " +
-					"			INNER JOIN Picture " +
-					"			ON Face.PictureId = Picture.PictureId " +
-					"			INNER JOIN Line " +
-					"			ON Picture.LineId = Line.LineId " +
-					"			WHERE " + ( !string.IsNullOrEmpty( userId ) ? "CONVERT( VARCHAR , Line.UserId ) = CONVERT( VARCHAR , @UserId ) " : "CONVERT( VARCHAR , Line.GroupId ) = CONVERT( VARCHAR , @GroupId ) " ) +
-					"			GROUP BY Face.Anger " +
-					"			ORDER BY Face.Anger DESC " +
-					"		) " +
-					"		ORDER BY Face.Anger DESC " +
-					"	) " +
-					"	UNION ALL " +
-					"	( " +
-					"		SELECT TOP( 3 ) Face.ProcessedPicturePath as Path , Face.Contempt as Value , 'Contempt' as Type " +
-					"		FROM Face " +
-					"		WHERE Face.Contempt IN( " +
-					"			SELECT TOP( 3 ) MAX( Face.Contempt ) as Value " +
-					"			FROM Face " +
-					"			INNER JOIN Picture " +
-					"			ON Face.PictureId = Picture.PictureId " +
-					"			INNER JOIN Line " +
-					"			ON Picture.LineId = Line.LineId " +
-					"			WHERE " + ( !string.IsNullOrEmpty( userId ) ? "CONVERT( VARCHAR , Line.UserId ) = CONVERT( VARCHAR , @UserId ) " : "CONVERT( VARCHAR , Line.GroupId ) = CONVERT( VARCHAR , @GroupId ) " ) +
-					"			GROUP BY Face.Contempt " +
-					"			ORDER BY Face.Contempt DESC " +
-					"		) " +
-					"		ORDER BY Face.Contempt DESC " +
-					"	) " +
-					"	UNION ALL " +
-					"	( " +
-					"		SELECT TOP( 3 ) Face.ProcessedPicturePath as Path , Face.Disgust as Value , 'Disgust' as Type " +
-					"		FROM Face " +
-					"		WHERE Face.Disgust IN( " +
-					"			SELECT TOP( 3 ) MAX( Face.Disgust ) as Value " +
-					"			FROM Face " +
-					"			INNER JOIN Picture " +
-					"			ON Face.PictureId = Picture.PictureId " +
-					"			INNER JOIN Line " +
-					"			ON Picture.LineId = Line.LineId " +
-					"			WHERE " + ( !string.IsNullOrEmpty( userId ) ? "CONVERT( VARCHAR , Line.UserId ) = CONVERT( VARCHAR , @UserId ) " : "CONVERT( VARCHAR , Line.GroupId ) = CONVERT( VARCHAR , @GroupId ) " ) +
-					"			GROUP BY Face.Disgust " +
-					"			ORDER BY Face.Disgust DESC " +
-					"		) " +
-					"		ORDER BY Face.Disgust DESC " +
-					"	) " +
-					"	UNION ALL " +
-					"	( " +
-					"		SELECT TOP( 3 ) Face.ProcessedPicturePath as Path , Face.Fear as Value , 'Fear' as Type " +
-					"		FROM Face " +
-					"		WHERE Face.Fear IN( " +
-					"			SELECT TOP( 3 ) MAX( Face.Fear ) as Value " +
-					"			FROM Face " +
-					"			INNER JOIN Picture " +
-					"			ON Face.PictureId = Picture.PictureId " +
-					"			INNER JOIN Line " +
-					"			ON Picture.LineId = Line.LineId " +
-					"			WHERE " + ( !string.IsNullOrEmpty( userId ) ? "CONVERT( VARCHAR , Line.UserId ) = CONVERT( VARCHAR , @UserId ) " : "CONVERT( VARCHAR , Line.GroupId ) = CONVERT( VARCHAR , @GroupId ) " ) +
-					"			GROUP BY Face.Fear " +
-					"			ORDER BY Face.Fear DESC " +
-					"		) " +
-					"		ORDER BY Face.Fear DESC " +
-					"	) " +
-					"	UNION ALL " +
-					"	( " +
-					"		SELECT TOP( 3 ) Face.ProcessedPicturePath as Path , Face.Happiness as Value , 'Happiness' as Type " +
-					"		FROM Face " +
-					"		WHERE Face.Happiness IN( " +
-					"			SELECT TOP( 3 ) MAX( Face.Happiness ) as Value " +
-					"			FROM Face " +
-					"			INNER JOIN Picture " +
-					"			ON Face.PictureId = Picture.PictureId " +
-					"			INNER JOIN Line " +
-					"			ON Picture.LineId = Line.LineId " +
-					"			WHERE " + ( !string.IsNullOrEmpty( userId ) ? "CONVERT( VARCHAR , Line.UserId ) = CONVERT( VARCHAR , @UserId ) " : "CONVERT( VARCHAR , Line.GroupId ) = CONVERT( VARCHAR , @GroupId ) " ) +
-					"			GROUP BY Face.Happiness " +
-					"			ORDER BY Face.Happiness DESC " +
-					"		) " +
-					"		ORDER BY Face.Happiness DESC " +
-					"	) " +
-					"	UNION ALL " +
-					"	( " +
-					"		SELECT TOP( 3 ) Face.ProcessedPicturePath as Path , Face.Sadness as Value , 'Sadness' as Type " +
-					"		FROM Face " +
-					"		WHERE Face.Sadness IN( " +
-					"			SELECT TOP( 3 ) MAX( Face.Sadness ) as Value " +
-					"			FROM Face " +
-					"			INNER JOIN Picture " +
-					"			ON Face.PictureId = Picture.PictureId " +
-					"			INNER JOIN Line " +
-					"			ON Picture.LineId = Line.LineId " +
-					"			WHERE " + ( !string.IsNullOrEmpty( userId ) ? "CONVERT( VARCHAR , Line.UserId ) = CONVERT( VARCHAR , @UserId ) " : "CONVERT( VARCHAR , Line.GroupId ) = CONVERT( VARCHAR , @GroupId ) " ) +
-					"			GROUP BY Face.Sadness " +
-					"			ORDER BY Face.Sadness DESC " +
-					"		) " +
-					"		ORDER BY Face.Sadness DESC " +
-					"	) " +
-					"	UNION ALL " +
-					"	( " +
-					"		SELECT TOP( 3 ) Face.ProcessedPicturePath as Path , Face.Surprise as Value , 'Surprise' as Type " +
-					"		FROM Face " +
-					"		WHERE Face.Surprise IN( " +
-					"			SELECT TOP( 3 ) MAX( Face.Surprise ) as Value " +
-					"			FROM Face " +
-					"			INNER JOIN Picture " +
-					"			ON Face.PictureId = Picture.PictureId " +
-					"			INNER JOIN Line " +
-					"			ON Picture.LineId = Line.LineId " +
-					"			WHERE " + ( !string.IsNullOrEmpty( userId ) ? "CONVERT( VARCHAR , Line.UserId ) = CONVERT( VARCHAR , @UserId ) " : "CONVERT( VARCHAR , Line.GroupId ) = CONVERT( VARCHAR , @GroupId ) " ) +
-					"			GROUP BY Face.Surprise " +
-					"			ORDER BY Face.Surprise DESC " +
-					"		) " +
-					"		ORDER BY Face.Surprise DESC " +
-					"	) " +
-					") SubQuery " +
-					"ORDER BY Value DESC " +
-					";";
-
-				Trace.TraceInformation( "Most Emotion Sql is : " + mostEmotionSql );
-
-				SqlCommand selectSqlCommand = new SqlCommand( mostEmotionSql , connection );
-				if( !string.IsNullOrEmpty( userId ) ) {
-					selectSqlCommand.Parameters.AddWithValue( "@UserId" , userId );
-					Trace.TraceInformation( "User Id is : " + userId );
-				}
-				else {
-					selectSqlCommand.Parameters.AddWithValue( "@GroupId" , groupId );
-					Trace.TraceInformation( "Group Id is : " + groupId );
-				}
-
-				Trace.TraceInformation( "SQL Execute" );
-				using( SqlDataReader reader = selectSqlCommand.ExecuteReader() ) {
-					int index = 0;
-					while( reader.Read() == true ) {
-
-						if( index == 0 ) {
-							url1 = reader[ "Path" ] as string;
-							decimal? value = reader[ "Value" ] as decimal?;
-							value1 = value.HasValue ? (double)value.Value : 0.0;
-							type1 = CommonUtil.ConvertEmotionStringIntoType( reader[ "Type" ] as string );
-							Trace.TraceInformation( "Url1 is : " + url1 );
-							Trace.TraceInformation( "Value1 is : " + value1 );
-							Trace.TraceInformation( "Type1 is : " + type1 );
-						}
-						else if( index == 1 ) {
-							url2 = reader[ "Path" ] as string;
-							decimal? value = reader[ "Value" ] as decimal?;
-							value2 = value.HasValue ? (double)value.Value : 0.0;
-							type2 = CommonUtil.ConvertEmotionStringIntoType( reader[ "Type" ] as string );
-							Trace.TraceInformation( "Url1 is : " + url2 );
-							Trace.TraceInformation( "Value1 is : " + value2 );
-							Trace.TraceInformation( "Type1 is : " + type2 );
-						}
-						else if( index == 2 ) {
-							url3 = reader[ "Path" ] as string;
-							decimal? value = reader[ "Value" ] as decimal?;
-							value3 = value.HasValue ? (double)value.Value : 0.0;
-							type3 = CommonUtil.ConvertEmotionStringIntoType( reader[ "Type" ] as string );
-							Trace.TraceInformation( "Url1 is : " + url3 );
-							Trace.TraceInformation( "Value1 is : " + value3 );
-							Trace.TraceInformation( "Type1 is : " + type3 );
-							break;
-						}
-
-						index++;
-
-					}
-
-				}
+				this.UpdatePostback( connection , isUserId , id , isInitialization );
 
 				connection.Close();
-
+				Trace.TraceInformation( "Connection Close" );
+				
+			}
+			catch( InvalidCastException e ) {
+				Trace.TraceError( "Update Postback Invalid Cast Exception : " + e.Message );
+				connection?.Close();
+				Trace.TraceInformation( "Connection Close" );
+			}
+			catch( SqlException e ) {
+				Trace.TraceError( "Update Postback Sql Exception : " + e.Message );
+				connection?.Close();
+				Trace.TraceInformation( "Connection Close" );
+			}
+			catch( ConfigurationErrorsException e ) {
+				Trace.TraceError( "Update Postback Configuration Errors Exception : " + e.Message );
+				connection?.Close();
+				Trace.TraceInformation( "Connection Close" );
 			}
 			catch( Exception e ) {
+				Trace.TraceInformation( "Update Postback 予期せぬ例外 : " + e.Message );
 				connection?.Close();
-				Trace.TraceInformation( "DB Error : " + e.Message );
+				Trace.TraceInformation( "Connection Close" );
 			}
-			
+
+			Trace.TraceInformation( "Update Postback End" );
+
 		}
 
 		/// <summary>
 		/// 画像の登録
 		/// </summary>
-		/// <param name="userId">ユーザID</param>
-		/// <param name="groupId">グループID</param>
+		/// <param name="userId">ユーザIDかどうか</param>
+		/// <param name="groupId">ユーザIDまたはグループID</param>
 		/// <param name="path">画像URL</param>
 		/// <returns>管理番号</returns>
-		public int RegistPicture( string userId , string groupId , string path ) {
+		public int RegistPicture( bool isUserId , string id , string path ) {
 
-			Trace.TraceInformation( "画像の登録" );
-			
+			Trace.TraceInformation( "Regist Picture Start" );
+
+			Trace.TraceInformation( "Regist Picture Is User Id : " + isUserId );
+			Trace.TraceInformation( "Regist Picture Id is : " + id );
+			Trace.TraceInformation( "Regist Picture Path is : " + path );
+
 			SqlConnection connection = null;
-			int registedPictureId = -1;
+			int pictureId = -1;
 			try {
 
-				//SQL発行
-				{
-					connection = new SqlConnection( this.connectionString );
-					connection.Open();
-					Trace.TraceInformation( "Connection Open" );
+				connection = new SqlConnection( this.connectionString );
+				connection.Open();
+				Trace.TraceInformation( "Connection Open" );
 
-					//LineIDの取得
-					int lineId = -1;
-					{
+				int lineId = this.GetLineId( connection , isUserId , id );
 
-						string selectLineIdSql =
-							"SELECT Line.LineId as LineId " +
-							"FROM Line " +
-							"WHERE " + ( !string.IsNullOrEmpty( userId ) ? "CONVERT( VARCHAR , Line.UserId ) = CONVERT( VARCHAR , @UserId ) " : "CONVERT( VARCHAR , Line.GroupId ) = CONVERT( VARCHAR , @GroupId ) " ) +
-							";";
-						Trace.TraceInformation( "Get Line Id SQL is : " + selectLineIdSql );
+				pictureId = this.GetMaxLineId( connection ) + 1;
 
-						SqlCommand selectSqlCommand = new SqlCommand( selectLineIdSql , connection );
-						if( !string.IsNullOrEmpty( userId ) ) {
-							selectSqlCommand.Parameters.AddWithValue( "@UserId" , userId );
-							Trace.TraceInformation( "User Id is : " + userId );
-						}
-						else {
-							selectSqlCommand.Parameters.AddWithValue( "@GroupId" , groupId );
-							Trace.TraceInformation( "Group Id s : " + groupId );
-						}
+				this.InsertPicture( connection , pictureId , path , lineId );
 
-						Trace.TraceInformation( "SQL Execute" );
-						using( SqlDataReader reader = selectSqlCommand.ExecuteReader() ) {
-							while( reader.Read() == true ) {
-								int? readerLineId = reader[ "LineId" ] as int?;
-								lineId = readerLineId.HasValue ? readerLineId.Value : -1;
-								break;
-							}
-						}
+				connection.Close();
+				Trace.TraceInformation( "Connection Close" );
 
-						Trace.TraceInformation( "Line Id is : " + lineId );
-
-					}
-
-					//PictureIdの最大値を取得
-					int maxPictureId = -1;
-					{
-
-						string selectMaxPictureIdSql =
-							"SELECT TOP( 1 ) Picture.PictureId as PictureId " +
-							"FROM Picture " +
-							"ORDER BY Picture.PictureId DESC " +
-							";";
-						Trace.TraceInformation( "Get Max Picture Id SQL is : " + selectMaxPictureIdSql );
-
-						SqlCommand selectSqlCommand = new SqlCommand( selectMaxPictureIdSql , connection );
-						Trace.TraceInformation( "SQL Execute" );
-						using( SqlDataReader reader = selectSqlCommand.ExecuteReader() ) {
-							while( reader.Read() == true ) {
-								int? readerPictureId = reader[ "PictureId" ] as int?;
-								maxPictureId = readerPictureId.HasValue ? readerPictureId.Value : -1;
-								break;
-							}
-						}
-						Trace.TraceInformation( "Max Picture Id is : " + maxPictureId );
-
-					}
-
-
-					//画像の登録
-					{
-
-						registedPictureId = maxPictureId + 1;
-
-						string registPictureSql =
-							@"INSERT INTO Picture ( PictureId , OriginalUrl , LineId ) VALUES ( @PictureId , @OriginalUrl , @LineId );";
-						
-						Trace.TraceInformation( "Regist Picture SQL is : " + registPictureSql );
-
-						SqlCommand insertSqlCommand = new SqlCommand( registPictureSql , connection );
-						insertSqlCommand.Parameters.AddWithValue( "@PictureId" , registedPictureId );
-						insertSqlCommand.Parameters.AddWithValue( "@OriginalUrl" , path );
-						insertSqlCommand.Parameters.AddWithValue( "@LineId" , lineId );
-						
-						int result = insertSqlCommand.ExecuteNonQuery();
-
-						if( result < 1 )
-							Trace.TraceInformation( "Insert Error" );
-					
-					}
-					
-					connection.Close();
-
-				}
-
+			}
+			catch( InvalidCastException e ) {
+				Trace.TraceError( "Regist Picture Invalid Cast Exception : " + e.Message );
+				connection?.Close();
+				Trace.TraceInformation( "Connection Close" );
+			}
+			catch( SqlException e ) {
+				Trace.TraceError( "Regist Picture Sql Exception : " + e.Message );
+				connection?.Close();
+				Trace.TraceInformation( "Connection Close" );
+			}
+			catch( ConfigurationErrorsException e ) {
+				Trace.TraceError( "Regist Picture Configuration Errors Exception : " + e.Message );
+				connection?.Close();
+				Trace.TraceInformation( "Connection Close" );
 			}
 			catch( Exception e ) {
+				Trace.TraceInformation( "Regist Picture 予期せぬ例外 : " + e.Message );
 				connection?.Close();
-				Trace.TraceInformation( "DB Error : " + e.Message );
+				Trace.TraceInformation( "Connection Close" );
 			}
-			
-			return registedPictureId;
+
+			Trace.TraceInformation( "Picture Id is : " + pictureId );
+
+			Trace.TraceInformation( "Regist Picture End" );
+
+			return pictureId;
 
 		}
 
@@ -790,100 +1283,299 @@ namespace LineBotCompanyTrip.Services.SQLServer {
 		/// <param name="pictureId">写真管理番号</param>
 		/// <param name="response">表情情報</param>
 		/// <param name="path">URL</param>
-		public void RegistFace( int pictureId , ResponseOfEmotionAPI response , string path ) {
+		/// <param name="faceId">Face API - Detectで取得するFaceId</param>
+		public void RegistFace( int pictureId , ResponseOfEmotionRecognitionAPI response , string path , string faceId ) {
 
-			Trace.TraceInformation( "表情の登録" );
-			
+			Trace.TraceInformation( "Regist Face Start" );
+
+			Trace.TraceInformation( "Regist Face Picture Id is : " + pictureId );
+			Trace.TraceInformation( "Regist Face Path is : " + path );
+			Trace.TraceInformation( "Regist Face Id is : " + faceId );
+
 			SqlConnection connection = null;
 			try {
-				
+
 				connection = new SqlConnection( this.connectionString );
 				connection.Open();
 				Trace.TraceInformation( "Connection Open" );
 
-				//FaceIDの最大値取得
-				int maxFaceId = -1;
-				{
+				int id = this.GetMaxFaceId( connection ) + 1;
 
-					string selectMaxFaceIdSql =
-						"SELECT Face.Id as Id " +
-						"FROM Face " +
-						"ORDER BY Face.Id DESC" +
-						";";
-					Trace.TraceInformation( "Get Max Face Id SQL is : " + selectMaxFaceIdSql );
-
-					SqlCommand selectSqlCommand = new SqlCommand( selectMaxFaceIdSql , connection );
-
-					Trace.TraceInformation( "SQL Execute" );
-					using( SqlDataReader reader = selectSqlCommand.ExecuteReader() ) {
-						while( reader.Read() == true ) {
-							int? readerMaxId = reader[ "Id" ] as int?;
-							maxFaceId = readerMaxId.HasValue ? readerMaxId.Value : -1;
-							break;
-						}
-					}
-
-					Trace.TraceInformation( "Max Face Id is : " + maxFaceId );
-
-				}
-
-				// 表情情報の登録
-				{
-
-					string registFaceSql =
-						"INSERT INTO Face " +
-						"( Id , FaceId , TopPos , LeftPos , Height , Width , Anger , Contempt , Disgust , Fear , Happiness , Neutral , Sadness , Surprise , PictureId , ProcessedPicturePath ) " +
-						"VALUES ( @Id , @FaceId , @TopPos , @LeftPos , @Height , @Width , @Anger , @Contempt , @Disgust , @Fear , @Happiness , @Neutral , @Sadness , @Surprise , @PictureId , @ProcessedPicturePath );";
-					Trace.TraceInformation( "Regist Face Sql is : " + registFaceSql );
-
-					SqlCommand registSqlCommand = new SqlCommand( registFaceSql , connection );
-					registSqlCommand.Parameters.AddWithValue( "@Id" , maxFaceId + 1 );
-					registSqlCommand.Parameters.AddWithValue( "@FaceId" , "" );
-					registSqlCommand.Parameters.AddWithValue( "@TopPos" , response.faceRectangle.top );
-					registSqlCommand.Parameters.AddWithValue( "@LeftPos" , response.faceRectangle.left );
-					registSqlCommand.Parameters.AddWithValue( "@Height" , response.faceRectangle.height );
-					registSqlCommand.Parameters.AddWithValue( "@Width" , response.faceRectangle.width );
-					registSqlCommand.Parameters.AddWithValue( "@Anger" , response.scores.anger );
-					registSqlCommand.Parameters.AddWithValue( "@Contempt" , response.scores.contempt );
-					registSqlCommand.Parameters.AddWithValue( "@Disgust" , response.scores.disgust );
-					registSqlCommand.Parameters.AddWithValue( "@Fear" , response.scores.fear );
-					registSqlCommand.Parameters.AddWithValue( "@Happiness" , response.scores.happiness );
-					registSqlCommand.Parameters.AddWithValue( "@Neutral" , response.scores.neutral );
-					registSqlCommand.Parameters.AddWithValue( "@Sadness" , response.scores.sadness );
-					registSqlCommand.Parameters.AddWithValue( "@Surprise" , response.scores.surprise );
-					registSqlCommand.Parameters.AddWithValue( "@PictureId" , pictureId );
-					registSqlCommand.Parameters.AddWithValue( "@ProcessedPicturePath" , path );
-					Trace.TraceInformation( "Id is : " + maxFaceId + 1 );
-					Trace.TraceInformation( "FaceId is : " + "" );
-					Trace.TraceInformation( "Top Pos is : " + response.faceRectangle.top );
-					Trace.TraceInformation( "Left Pos is : " + response.faceRectangle.left );
-					Trace.TraceInformation( "Height is : " + response.faceRectangle.height );
-					Trace.TraceInformation( "Width is : " + response.faceRectangle.width );
-					Trace.TraceInformation( "Anger is : " + response.scores.anger );
-					Trace.TraceInformation( "Contempt is : " + response.scores.contempt );
-					Trace.TraceInformation( "Disgust is : " + response.scores.disgust );
-					Trace.TraceInformation( "Fear is : " + response.scores.fear );
-					Trace.TraceInformation( "Happiness is : " + response.scores.happiness );
-					Trace.TraceInformation( "Neutral is : " + response.scores.neutral );
-					Trace.TraceInformation( "Sadness is : " + response.scores.sadness );
-					Trace.TraceInformation( "Surprise is : " + response.scores.surprise );
-					Trace.TraceInformation( "Picture Id is : " + pictureId );
-					Trace.TraceInformation( "Path is : " + path );
-
-					int result = registSqlCommand.ExecuteNonQuery();
-
-					if( result < 1 )
-						Trace.TraceInformation( "Insert Error" );
-
-				}
+				this.InsertFace( connection , id , faceId , response , pictureId , path );
 
 				connection.Close();
+				Trace.TraceInformation( "Connection Close" );
 
 			}
-			catch( Exception e ) {
+			catch( InvalidCastException e ) {
+				Trace.TraceError( "Regist Face Invalid Cast Exception : " + e.Message );
 				connection?.Close();
-				Trace.TraceInformation( "Error : " + e.Message );
+				Trace.TraceInformation( "Connection Close" );
 			}
+			catch( SqlException e ) {
+				Trace.TraceError( "Regist Face Sql Exception : " + e.Message );
+				connection?.Close();
+				Trace.TraceInformation( "Connection Close" );
+			}
+			catch( ConfigurationErrorsException e ) {
+				Trace.TraceError( "Regist Face Configuration Errors Exception : " + e.Message );
+				connection?.Close();
+				Trace.TraceInformation( "Connection Close" );
+			}
+			catch( Exception e ) {
+				Trace.TraceInformation( "Regist Face 予期せぬ例外 : " + e.Message );
+				connection?.Close();
+				Trace.TraceInformation( "Connection Close" );
+			}
+
+			Trace.TraceInformation( "Regist Face End" );
+
+		}
+
+		/// <summary>
+		/// FaceIdよりURLを取得する
+		/// </summary>
+		/// <param name="faceId">FaceId</param>
+		/// <returns>URL</returns>
+		public string GetFaceUrl( string faceId ) {
+
+			Trace.TraceInformation( "Get Face URL Start" );
+
+			Trace.TraceInformation( "Get Face URL Face Id is : " + faceId );
+
+			SqlConnection connection = null;
+			string url = "";
+			try {
+
+				connection = new SqlConnection( this.connectionString );
+				connection.Open();
+				Trace.TraceInformation( "Connection Open" );
+
+				url = this.GetFaceUrl( connection , faceId );
+				
+				connection.Close();
+				Trace.TraceInformation( "Connection Close" );
+
+			}
+			catch( InvalidCastException e ) {
+				Trace.TraceError( "Get Face URL Invalid Cast Exception : " + e.Message );
+				connection?.Close();
+				Trace.TraceInformation( "Connection Close" );
+			}
+			catch( SqlException e ) {
+				Trace.TraceError( "Get Face URL Sql Exception : " + e.Message );
+				connection?.Close();
+				Trace.TraceInformation( "Connection Close" );
+			}
+			catch( ConfigurationErrorsException e ) {
+				Trace.TraceError( "Get Face URL Configuration Errors Exception : " + e.Message );
+				connection?.Close();
+				Trace.TraceInformation( "Connection Close" );
+			}
+			catch( Exception e ) {
+				Trace.TraceInformation( "Get Face URL 予期せぬ例外 : " + e.Message );
+				connection?.Close();
+				Trace.TraceInformation( "Connection Close" );
+			}
+
+			Trace.TraceInformation( "Get Face URL is : " + url );
+
+			Trace.TraceInformation( "Get Face URL End" );
+
+			return url;
+
+		}
+
+		/// <summary>
+		/// 顔IDを取得する
+		/// </summary>
+		/// <param name="isUserId">ユーザIDかどうか</param>
+		/// <param name="id">ユーザIDまたはグループID</param>
+		/// <returns>顔IDリスト</returns>
+		public List<string> GetFaceIds( bool isUserId , string id ) {
+
+			Trace.TraceInformation( "Get Face Ids Start" );
+
+			Trace.TraceInformation( "Get Face Ids Is User Id is : " + isUserId );
+			Trace.TraceInformation( "Get Face Ids Id is : " + id );
+
+			List<string> ids = new List<string>();
+			SqlConnection connection = null;
+			try {
+
+				connection = new SqlConnection( this.connectionString );
+				connection.Open();
+				Trace.TraceInformation( "Connection Open" );
+
+				ids = this.GetFaceIds( connection , isUserId , id );
+
+				connection.Close();
+				Trace.TraceInformation( "Connection Close" );
+
+			}
+			catch( InvalidCastException e ) {
+				Trace.TraceError( "Get Face Ids Invalid Cast Exception : " + e.Message );
+				connection?.Close();
+				Trace.TraceInformation( "Connection Close" );
+			}
+			catch( SqlException e ) {
+				Trace.TraceError( "Get Face Ids Sql Exception : " + e.Message );
+				connection?.Close();
+				Trace.TraceInformation( "Connection Close" );
+			}
+			catch( ConfigurationErrorsException e ) {
+				Trace.TraceError( "Get Face Ids Configuration Errors Exception : " + e.Message );
+				connection?.Close();
+				Trace.TraceInformation( "Connection Close" );
+			}
+			catch( Exception e ) {
+				Trace.TraceInformation( "Get Face Ids 予期せぬ例外 : " + e.Message );
+				connection?.Close();
+				Trace.TraceInformation( "Connection Close" );
+			}
+
+			Trace.TraceInformation( "Get Face Ids Length is : " + ids.Count );
+
+			Trace.TraceInformation( "Get Face Ids End" );
+
+			return ids;
+
+		}
+
+		/// <summary>
+		/// 最も笑顔の画像と笑顔度を返す
+		/// </summary>
+		/// <param name="isUserId">ユーザIDかどうか</param>
+		/// <param name="id">ユーザIDまたはグループID</param>
+		/// <param name="url1">URL</param>
+		/// <param name="value1">笑顔度</param>
+		/// <param name="url2">URL</param>
+		/// <param name="value2">笑顔度</param>
+		/// <param name="url3">URL</param>
+		/// <param name="value3">笑顔度</param>
+		public void GetMostHappiness(
+			bool isUserId ,
+			string id ,
+			ref string url1 ,
+			ref double value1 ,
+			ref string url2 ,
+			ref double value2 ,
+			ref string url3 ,
+			ref double value3
+		) {
+
+			Trace.TraceInformation( "Get Most Happiness Start" );
+
+			Trace.TraceInformation( "Get Most Happiness Is User Id is : " + isUserId );
+			Trace.TraceInformation( "Get Most Happiness Id is : " + id );
+			
+			SqlConnection connection = null;
+			try {
+
+				connection = new SqlConnection( this.connectionString );
+				connection.Open();
+				Trace.TraceInformation( "Connection Open" );
+				
+				this.GetMostHappiness( connection , isUserId , id , ref url1 , ref value1 , ref url2 , ref value2 , ref url3 , ref value3 );
+				
+				connection.Close();
+				Trace.TraceInformation( "Connection Close" );
+
+			}
+			catch( InvalidCastException e ) {
+				Trace.TraceError( "Get Most Happiness Invalid Cast Exception : " + e.Message );
+				connection?.Close();
+				Trace.TraceInformation( "Connection Close" );
+			}
+			catch( SqlException e ) {
+				Trace.TraceError( "Get Most Happiness Sql Exception : " + e.Message );
+				connection?.Close();
+				Trace.TraceInformation( "Connection Close" );
+			}
+			catch( ConfigurationErrorsException e ) {
+				Trace.TraceError( "Get Most Happiness Configuration Errors Exception : " + e.Message );
+				connection?.Close();
+				Trace.TraceInformation( "Connection Close" );
+			}
+			catch( Exception e ) {
+				Trace.TraceInformation( "Get Most Happiness 予期せぬ例外 : " + e.Message );
+				connection?.Close();
+				Trace.TraceInformation( "Connection Close" );
+			}
+
+			Trace.TraceInformation( "Get Most Happiness End" );
+
+		}
+
+		/// <summary>
+		/// 最も表情豊かな画像と表情種別と表情度を返す
+		/// </summary>
+		/// <param name="isUserId">ユーザIDかどうか</param>
+		/// <param name="id">ユーザIDまたはグループID</param>
+		/// <param name="url1">URL</param>
+		/// <param name="type1">表情種別</param>
+		/// <param name="value1">表情度</param>
+		/// <param name="url2">URL</param>
+		/// <param name="type2">表情種別</param>
+		/// <param name="value2">表情度</param>
+		/// <param name="url3">URL</param>
+		/// <param name="type3">表情種別</param>
+		/// <param name="value3">表情度</param>
+		public void GetMostEmotion(
+			bool isUserId ,
+			string id ,
+			ref string url1 ,
+			ref CommonEnum.EmotionType type1 ,
+			ref double value1 ,
+			ref string url2 ,
+			ref CommonEnum.EmotionType type2 ,
+			ref double value2 ,
+			ref string url3 ,
+			ref CommonEnum.EmotionType type3 ,
+			ref double value3
+		) {
+
+			Trace.TraceInformation( "Get Most Emotion Start" );
+
+			Trace.TraceInformation( "Get Most Emotion Is User Id is : " + isUserId );
+			Trace.TraceInformation( "Get Most Emotion Id is : " + id );
+			
+			SqlConnection connection = null;
+			try {
+
+				connection = new SqlConnection( this.connectionString );
+				connection.Open();
+				Trace.TraceInformation( "Connection Open" );
+
+				this.GetMostEmotion( connection , isUserId , id , ref url1 , ref type1 , ref value1 , ref url2 , ref type2 , ref value2 , ref url3 , ref type3 , ref value3 );
+
+				connection.Close();
+				Trace.TraceInformation( "Connection Close" );
+
+			}
+			catch( InvalidCastException e ) {
+				Trace.TraceError( "Get Most Emotion Invalid Cast Exception : " + e.Message );
+				connection?.Close();
+				Trace.TraceInformation( "Connection Close" );
+			}
+			catch( SqlException e ) {
+				Trace.TraceError( "Get Most Emotion Sql Exception : " + e.Message );
+				connection?.Close();
+				Trace.TraceInformation( "Connection Close" );
+			}
+			catch( ConfigurationErrorsException e ) {
+				Trace.TraceError( "Get Most Emotion Configuration Errors Exception : " + e.Message );
+				connection?.Close();
+				Trace.TraceInformation( "Connection Close" );
+			}
+			catch( Exception e ) {
+				Trace.TraceInformation( "Get Most Emotion 予期せぬ例外 : " + e.Message );
+				connection?.Close();
+				Trace.TraceInformation( "Connection Close" );
+			}
+
+			Trace.TraceInformation( "Get Most Emotion End" );
+			
 
 		}
 		

@@ -3,6 +3,7 @@ using System.Drawing.Imaging;
 using System.IO;
 using LineBotCompanyTrip.Common;
 using LineBotCompanyTrip.Models.AzureCognitiveServices.EmotionAPI;
+using System.Diagnostics;
 
 namespace LineBotCompanyTrip.Services.ProcessPicture {
 
@@ -19,8 +20,10 @@ namespace LineBotCompanyTrip.Services.ProcessPicture {
 		/// <param name="penColor">ペン色</param>
 		/// <param name="brushColor">ブラシ色</param>
 		/// <param name="text">描画文字列</param>
-		private void GetDrawAnalysisData( CommonEnum.EmotionType type , double value , ref Pen penColor , ref Brush brushColor , ref string text ) {
+		private void GetAnalysisDataForDrawing( CommonEnum.EmotionType type , double value , ref Pen penColor , ref Brush brushColor , ref string text ) {
 
+			Trace.TraceInformation( "Get Analysis Data For Drawing Start" );
+			
 			switch( type ) {
 				case CommonEnum.EmotionType.happiness:
 					penColor = Pens.Pink;
@@ -64,23 +67,36 @@ namespace LineBotCompanyTrip.Services.ProcessPicture {
 					break;
 			}
 
+			Trace.TraceInformation( "Analysis Data For Drawing Pen Color is : " + penColor.Color.ToString() );
+			Trace.TraceInformation( "Analysis Data For Drawing Brush Color is : " + brushColor.ToString() );
+			Trace.TraceInformation( "Analysis Data For Drawing Text is : " + text );
+			
+			Trace.TraceInformation( "Get Analysis Data For Drawing End" );
+
 		}
 
 		/// <summary>
 		/// 枠線を指定色で囲う
 		/// </summary>
-		/// <param name="imageBytes">画像のバイナリデータ</param>
+		/// <param name="pictureBytes">画像のバイナリデータ</param>
 		/// <param name="posX">枠左上座標（左）</param>
 		/// <param name="posY">枠左上座標（上）</param>
 		/// <param name="width">枠幅</param>
 		/// <param name="height">枠高さ</param>
 		/// <param name="pen">Pensで取得するペンの色</param>
 		/// <returns>加工済み画像のバイナリデータ</returns>
-		private byte[] DrawFrame( byte[] imageBytes , int posX , int posY , int width , int height , Pen pen ) {
+		private byte[] DrawFrameOnPicture( byte[] pictureBytes , int posX , int posY , int width , int height , Pen pen ) {
+			
+			Trace.TraceInformation( "Draw Frame On Picture Start" );
 
-			MemoryStream imageStream = new MemoryStream( imageBytes );
+			Trace.TraceInformation( "Frame Pos is : ( " + posX + " , " + posY + " )" );
+			Trace.TraceInformation( "Frame Width is : " + width );
+			Trace.TraceInformation( "Frame Height is : " + height );
+			Trace.TraceInformation( "Frame Color is : " + pen.Color.ToString() );
 
-			Bitmap bitmap = new Bitmap( imageStream );
+			MemoryStream pictureStream = new MemoryStream( pictureBytes );
+
+			Bitmap bitmap = new Bitmap( pictureStream );
 			Graphics graphics = Graphics.FromImage( bitmap );
 			
 			graphics.DrawLine( pen , posX , posY , posX , posY + height );
@@ -108,9 +124,11 @@ namespace LineBotCompanyTrip.Services.ProcessPicture {
 
 			bitmap.Dispose();
 			graphics.Dispose();
-			imageStream.Dispose();
+			pictureStream.Dispose();
 			savedStream.Dispose();
 
+			Trace.TraceInformation( "Draw Frame On Picture End" );
+			
 			return bytes;
 			
 		}
@@ -118,17 +136,24 @@ namespace LineBotCompanyTrip.Services.ProcessPicture {
 		/// <summary>
 		/// 指定位置にメッセージを描画する
 		/// </summary>
-		/// <param name="imageBytes">画像のバイナリデータ</param>
+		/// <param name="pictureBytes">画像のバイナリデータ</param>
 		/// <param name="posX">描画位置（左）</param>
 		/// <param name="posY">描画位置（上）</param>
 		/// <param name="pen">Pensで取得するペンの色</param>
 		/// <param name="brush">Brushesで取得するブラシの色</param>
 		/// <param name="message">メッセージ</param>
 		/// <returns>加工済み画像のバイナリデータ</returns>
-		private byte[] DrawMessage( byte[] imageBytes , int posX , int posY , Pen pen , Brush brush , string message ) {
+		private byte[] DrawMessageOnPicture( byte[] pictureBytes , int posX , int posY , Pen pen , Brush brush , string message ) {
 
-			MemoryStream imageStream = new MemoryStream( imageBytes );
-			Bitmap bitmap = new Bitmap( imageStream );
+			Trace.TraceInformation( "Draw Message On Picture Start" );
+
+			Trace.TraceInformation( "Message Pos is : ( " + posX + " , " + posY + " )" );
+			Trace.TraceInformation( "Message Pen Color is : " + pen.Color.ToString() );
+			Trace.TraceInformation( "Message Brush Color is : " + brush.ToString() );
+			Trace.TraceInformation( "Message is : " + message );
+
+			MemoryStream pictureStream = new MemoryStream( pictureBytes );
+			Bitmap bitmap = new Bitmap( pictureStream );
 			Graphics graphics = Graphics.FromImage( bitmap );
 			Font font = new Font( "MS UI Gothic" , 10 );
 
@@ -153,9 +178,11 @@ namespace LineBotCompanyTrip.Services.ProcessPicture {
 			font.Dispose();
 			graphics.Dispose();
 			bitmap.Dispose();
-			imageStream.Dispose();
+			pictureStream.Dispose();
 			savedStream.Dispose();
-			
+
+			Trace.TraceInformation( "Draw Message On Picture End" );
+
 			return bytes;
 
 		}
@@ -163,10 +190,12 @@ namespace LineBotCompanyTrip.Services.ProcessPicture {
 		/// <summary>
 		/// 解析結果を画像のバイナリデータに描画する
 		/// </summary>
-		/// <param name="imageBytes">画像のバイナリデータ</param>
+		/// <param name="pictureBytes">画像のバイナリデータ</param>
 		/// <param name="response">Emotion APIで取得した結果</param>
 		/// <returns>描画後画像のバイナリデータ</returns>
-		public byte[] DrawAnalysis( byte[] imageBytes , ResponseOfEmotionAPI response ) {
+		public byte[] DrawAnalysisOnPicture( byte[] pictureBytes , ResponseOfEmotionRecognitionAPI response ) {
+
+			Trace.TraceInformation( "Draw Analysis On Picture Start" );
 			
 			CommonEnum.EmotionType type = CommonEnum.EmotionType.neutral;
 			double value = 0.0;
@@ -175,10 +204,10 @@ namespace LineBotCompanyTrip.Services.ProcessPicture {
 			Pen penColor = null;
 			Brush brushColor = null;
 			string text = "";
-			this.GetDrawAnalysisData( type , value , ref penColor , ref brushColor , ref text );
+			this.GetAnalysisDataForDrawing( type , value , ref penColor , ref brushColor , ref text );
 
-			imageBytes = this.DrawFrame(
-				imageBytes ,
+			pictureBytes = this.DrawFrameOnPicture(
+				pictureBytes ,
 				response.faceRectangle.left ,
 				response.faceRectangle.top ,
 				response.faceRectangle.width ,
@@ -186,8 +215,8 @@ namespace LineBotCompanyTrip.Services.ProcessPicture {
 				penColor
 			);
 
-			imageBytes = this.DrawMessage(
-				imageBytes ,
+			pictureBytes = this.DrawMessageOnPicture(
+				pictureBytes ,
 				response.faceRectangle.left ,
 				response.faceRectangle.top ,
 				penColor ,
@@ -195,7 +224,9 @@ namespace LineBotCompanyTrip.Services.ProcessPicture {
 				text
 			);
 
-			return imageBytes;
+			Trace.TraceInformation( "Draw Analysis On Picture End" );
+
+			return pictureBytes;
 
 		}
 

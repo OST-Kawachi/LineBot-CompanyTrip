@@ -182,6 +182,8 @@
     </Compile>
     <Compile Include="Models\AzureCognitiveServices\EmotionAPI\FaceRectangle.cs" />
     <Compile Include="Models\AzureCognitiveServices\EmotionAPI\Scores.cs" />
+    <Compile Include="Models\AzureCognitiveServices\FaceAPI\RequestOfFaceGroupAPI.cs" />
+    <Compile Include="Models\AzureCognitiveServices\FaceAPI\ResponseOfFaceGroupAPI.cs" />
     <Compile Include="Models\LineBot\ReplyMessage\Action.cs" />
     <Compile Include="Models\LineBot\ReplyMessage\Column.cs" />
     <Compile Include="Models\LineBot\ReplyMessage\Message.cs" />
@@ -191,8 +193,8 @@
     <Compile Include="Models\Webhook\MessageObject.cs" />
     <Compile Include="Models\Webhook\Postback.cs" />
     <Compile Include="Models\Webhook\RequestOfWebhook.cs" />
-    <Compile Include="Models\AzureCognitiveServices\EmotionAPI\ResponseOfEmotionAPI.cs" />
-    <Compile Include="Models\AzureCognitiveServices\FaceAPI\ResponseOfFaceAPI.cs" />
+    <Compile Include="Models\AzureCognitiveServices\EmotionAPI\ResponseOfEmotionRecognitionAPI.cs" />
+    <Compile Include="Models\AzureCognitiveServices\FaceAPI\ResponseOfFaceDetectAPI.cs" />
     <Compile Include="Models\Webhook\Source.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Services\Emotion\EmotionService.cs" />

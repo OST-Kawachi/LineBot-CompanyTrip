@@ -21,7 +21,7 @@ namespace LineBotCompanyTrip.Common {
 		/// <param name="response">レスポンス</param>
 		/// <param name="type">表情種別</param>
 		/// <param name="value">表情評価</param>
-		public static void GetMostEmotion( ResponseOfEmotionAPI response , ref CommonEnum.EmotionType type , ref double value ) {
+		public static void GetMostEmotion( ResponseOfEmotionRecognitionAPI response , ref CommonEnum.EmotionType type , ref double value ) {
 
 			//幸せ度40%以上で幸せ認定
 			double happiness = Math.Truncate( response.scores.happiness * 10000 ) / 10000;
