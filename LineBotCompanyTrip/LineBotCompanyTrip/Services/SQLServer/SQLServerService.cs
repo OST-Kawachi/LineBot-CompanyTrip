@@ -662,7 +662,7 @@ namespace LineBotCompanyTrip.Services.SQLServer {
 		/// <param name="isUserId">idがユーザIDかどうか</param>
 		/// <param name="id">ユーザIDまたはグループID</param>
 		/// <returns>顔IDリスト</returns>
-		public List<string> GetFaceIds( SqlConnection alreadyOpenedConnection , bool isUserId , string id ) {
+		private List<string> GetFaceIds( SqlConnection alreadyOpenedConnection , bool isUserId , string id ) {
 
 			Trace.TraceInformation( "Get Face Ids Start" );
 			string selectSql = @"
@@ -673,7 +673,7 @@ namespace LineBotCompanyTrip.Services.SQLServer {
 				INNER JOIN Line
 				ON Picture.LineId = Line.LineId
 				WHERE " + this.GetWhereUserIdOrGroupId( isUserId , id ) + @" ;";
-			Trace.TraceInformation( "Insert Face Sql is : " + selectSql );
+			Trace.TraceInformation( "Get Face Sql is : " + selectSql );
 
 			SqlCommand selectSqlCommand = new SqlCommand( selectSql , alreadyOpenedConnection );
 			if( isUserId )
@@ -688,6 +688,7 @@ namespace LineBotCompanyTrip.Services.SQLServer {
 				reader = selectSqlCommand.ExecuteReader();
 				while( reader.Read() == true ) {
 					string readerFaceId = reader[ "Id" ] as string;
+					Trace.TraceInformation( "Get Face Id is : " + readerFaceId );
 					ids.Add( readerFaceId );
 				}
 				reader.Close();
@@ -720,6 +721,72 @@ namespace LineBotCompanyTrip.Services.SQLServer {
 			Trace.TraceInformation( "Get Face Ids End" );
 
 			return ids;
+
+		}
+
+		/// <summary>
+		/// FaceIdよりURLを取得する
+		/// </summary>
+		/// <param name="alreadyOpenedConnection">既にSqlConnection.Open()が呼ばれているコネクション</param>
+		/// <param name="faceId">FaceId</param>
+		/// <returns>URL</returns>
+		private string GetFaceUrl( SqlConnection alreadyOpenedConnection , string faceId ) {
+			
+			Trace.TraceInformation( "Get Face URL Start" );
+
+			string url = "";
+
+			string selectSql = @"
+				SELECT Face.ProcessedPicturePath as Url
+				FROM Face
+				WHERE CONVERT( VARCHAR , Face.FaceId ) = CONVERT( VARCHAR , @FaceId );";
+			Trace.TraceInformation( "Get Face Url Sql is : " + selectSql );
+
+			SqlCommand selectSqlCommand = new SqlCommand( selectSql , alreadyOpenedConnection );
+			selectSqlCommand.Parameters.AddWithValue( "@FaceId" , faceId );
+
+			Trace.TraceInformation( "SQL Execute" );
+			SqlDataReader reader = null;
+			try {
+				reader = selectSqlCommand.ExecuteReader();
+				while( reader.Read() == true ) {
+					string readerUrl = reader[ "Url" ] as string;
+					Trace.TraceInformation( "Get Face Url Reader Url is : " + reader );
+					url = readerUrl;
+					break;
+				}
+				reader.Close();
+			}
+			catch( InvalidCastException e ) {
+				Trace.TraceError( "Get Face URL Invalid Cast Exception : " + e.Message );
+				reader?.Close();
+			}
+			catch( SqlException e ) {
+				Trace.TraceError( "Get Face URL Sql Exception : " + e.Message );
+				reader?.Close();
+			}
+			catch( ObjectDisposedException e ) {
+				Trace.TraceError( "Get Face URL Object Disposed Exception : " + e.Message );
+				reader?.Close();
+			}
+			catch( InvalidOperationException e ) {
+				Trace.TraceError( "Get Face URL Invalid Operation Exception : " + e.Message );
+				reader?.Close();
+			}
+			catch( IOException e ) {
+				Trace.TraceError( "Get Face URL IOException : " + e.Message );
+				reader?.Close();
+			}
+			catch( Exception e ) {
+				Trace.TraceError( "Get Face URL 予期せぬ例外 : " + e.Message );
+				reader?.Close();
+			}
+
+			Trace.TraceInformation( "Get Face Url is " + url );
+
+			Trace.TraceInformation( "Get Face URL End" );
+
+			return url;
 
 		}
 
@@ -877,8 +944,7 @@ namespace LineBotCompanyTrip.Services.SQLServer {
 			Trace.TraceInformation( "Get Most Emotion Is User Id is : " + isUserId );
 			Trace.TraceInformation( "Get Most Emotion Id is : " + id );
 
-			string selectSql = @"";
-			string mostEmotionSql = @"
+			string selectSql = @"
 				SELECT TOP( 3 ) SubQuery.Path as Path , SubQuery.Value as Value , SubQuery.Type as Type
 				FROM(
 					( " +　this.GetSubQueryOfMostEmotion( "Anger" , isUserId , id ) + @" )
@@ -1265,7 +1331,61 @@ namespace LineBotCompanyTrip.Services.SQLServer {
 			Trace.TraceInformation( "Regist Face End" );
 
 		}
-		
+
+		/// <summary>
+		/// FaceIdよりURLを取得する
+		/// </summary>
+		/// <param name="faceId">FaceId</param>
+		/// <returns>URL</returns>
+		public string GetFaceUrl( string faceId ) {
+
+			Trace.TraceInformation( "Get Face URL Start" );
+
+			Trace.TraceInformation( "Get Face URL Face Id is : " + faceId );
+
+			SqlConnection connection = null;
+			string url = "";
+			try {
+
+				connection = new SqlConnection( this.connectionString );
+				connection.Open();
+				Trace.TraceInformation( "Connection Open" );
+
+				url = this.GetFaceUrl( connection , faceId );
+				
+				connection.Close();
+				Trace.TraceInformation( "Connection Close" );
+
+			}
+			catch( InvalidCastException e ) {
+				Trace.TraceError( "Get Face URL Invalid Cast Exception : " + e.Message );
+				connection?.Close();
+				Trace.TraceInformation( "Connection Close" );
+			}
+			catch( SqlException e ) {
+				Trace.TraceError( "Get Face URL Sql Exception : " + e.Message );
+				connection?.Close();
+				Trace.TraceInformation( "Connection Close" );
+			}
+			catch( ConfigurationErrorsException e ) {
+				Trace.TraceError( "Get Face URL Configuration Errors Exception : " + e.Message );
+				connection?.Close();
+				Trace.TraceInformation( "Connection Close" );
+			}
+			catch( Exception e ) {
+				Trace.TraceInformation( "Get Face URL 予期せぬ例外 : " + e.Message );
+				connection?.Close();
+				Trace.TraceInformation( "Connection Close" );
+			}
+
+			Trace.TraceInformation( "Get Face URL is : " + url );
+
+			Trace.TraceInformation( "Get Face URL End" );
+
+			return url;
+
+		}
+
 		/// <summary>
 		/// 顔IDを取得する
 		/// </summary>
@@ -1279,7 +1399,7 @@ namespace LineBotCompanyTrip.Services.SQLServer {
 			Trace.TraceInformation( "Get Face Ids Is User Id is : " + isUserId );
 			Trace.TraceInformation( "Get Face Ids Id is : " + id );
 
-			List<string> ids = null;
+			List<string> ids = new List<string>();
 			SqlConnection connection = null;
 			try {
 
@@ -1294,29 +1414,31 @@ namespace LineBotCompanyTrip.Services.SQLServer {
 
 			}
 			catch( InvalidCastException e ) {
-				Trace.TraceError( "Get Most Emotion Invalid Cast Exception : " + e.Message );
+				Trace.TraceError( "Get Face Ids Invalid Cast Exception : " + e.Message );
 				connection?.Close();
 				Trace.TraceInformation( "Connection Close" );
 			}
 			catch( SqlException e ) {
-				Trace.TraceError( "Get Most Emotion Sql Exception : " + e.Message );
+				Trace.TraceError( "Get Face Ids Sql Exception : " + e.Message );
 				connection?.Close();
 				Trace.TraceInformation( "Connection Close" );
 			}
 			catch( ConfigurationErrorsException e ) {
-				Trace.TraceError( "Get Most Emotion Configuration Errors Exception : " + e.Message );
+				Trace.TraceError( "Get Face Ids Configuration Errors Exception : " + e.Message );
 				connection?.Close();
 				Trace.TraceInformation( "Connection Close" );
 			}
 			catch( Exception e ) {
-				Trace.TraceInformation( "Get Most Emotion 予期せぬ例外 : " + e.Message );
+				Trace.TraceInformation( "Get Face Ids 予期せぬ例外 : " + e.Message );
 				connection?.Close();
 				Trace.TraceInformation( "Connection Close" );
 			}
-			
+
+			Trace.TraceInformation( "Get Face Ids Length is : " + ids.Count );
+
 			Trace.TraceInformation( "Get Face Ids End" );
 
-			return null;
+			return ids;
 
 		}
 

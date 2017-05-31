@@ -182,6 +182,7 @@
     </Compile>
     <Compile Include="Models\AzureCognitiveServices\EmotionAPI\FaceRectangle.cs" />
     <Compile Include="Models\AzureCognitiveServices\EmotionAPI\Scores.cs" />
+    <Compile Include="Models\AzureCognitiveServices\FaceAPI\RequestOfFaceGroupAPI.cs" />
     <Compile Include="Models\AzureCognitiveServices\FaceAPI\ResponseOfFaceGroupAPI.cs" />
     <Compile Include="Models\LineBot\ReplyMessage\Action.cs" />
     <Compile Include="Models\LineBot\ReplyMessage\Column.cs" />

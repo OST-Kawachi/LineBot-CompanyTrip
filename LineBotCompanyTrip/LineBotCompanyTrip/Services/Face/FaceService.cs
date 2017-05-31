@@ -35,7 +35,7 @@ namespace LineBotCompanyTrip.Services.Face{
 
 			try {
 
-				HttpResponseMessage response = await client.PostAsync( FaceConfig.FaceApiUrl , content );
+				HttpResponseMessage response = await client.PostAsync( FaceConfig.FaceDetectApiUrl , content );
 				string resultAsString = await response.Content.ReadAsStringAsync();
 				Trace.TraceInformation( "Face API - Detect Result is : " + resultAsString );
 				binaryStream.Dispose();
@@ -82,7 +82,11 @@ namespace LineBotCompanyTrip.Services.Face{
 			
 			Trace.TraceInformation( "Call Face API - Group Start" );
 			
-			string jsonRequest = JsonConvert.SerializeObject( faceIds );
+			string jsonRequest = JsonConvert.SerializeObject(
+				new RequestOfFaceGroupAPI() {
+					faceIds = faceIds.ToArray()
+				}
+			);
 			Trace.TraceInformation( "Face API Group Request is : " + jsonRequest );
 			StringContent content = new StringContent( jsonRequest );
 			content.Headers.ContentType = new MediaTypeHeaderValue( "application/json" );

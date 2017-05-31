@@ -16,6 +16,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Web.Http;
 using LineBotCompanyTrip.Services.SQLServer;
+using System;
 
 namespace LineBotCompanyTrip.Controllers {
 
@@ -53,7 +54,7 @@ namespace LineBotCompanyTrip.Controllers {
 			
 			this.sqlServiceServer = new SQLServerService();
 
-			bool isUserId = firstEvent.source.type.Equals( "userId" );
+			bool isUserId = firstEvent.source.type.Equals( "user" );
 			string userIdOrGroupId = isUserId ? firstEvent.source.userId : firstEvent.source.groupId;
 			Trace.TraceInformation( "Is User Id is : " + isUserId );
 			Trace.TraceInformation( "User Id Or Group Id is : " + userIdOrGroupId );
@@ -486,7 +487,7 @@ namespace LineBotCompanyTrip.Controllers {
 			//PostbackStatusの確認と更新
 			{
 
-				if( !this.sqlServiceServer.IsPostbackInitialization( isUserId , id ) ) {
+				if( this.sqlServiceServer.IsPostbackInitialization( isUserId , id ) ) {
 					Trace.TraceError( "Postback Is Not Initialization" );
 					Trace.TraceInformation( "Count Ranking Event End" );
 					return new HttpResponseMessage( HttpStatusCode.OK );
@@ -497,15 +498,46 @@ namespace LineBotCompanyTrip.Controllers {
 
 			List<string> faceIds = this.sqlServiceServer.GetFaceIds( isUserId , id );
 
-			// TODO Face API - Groupより色々やる
+			//Face APIよりFaceIDのグループ分け
+			ResponseOfFaceGroupAPI responseOfFaceGroupAPI = null;
+			{
+				FaceService faceService = new FaceService();
+				responseOfFaceGroupAPI = await faceService.CallGroup( faceIds );
+			}
 
-			string url1 = "";
-			string url2 = "";
-			string url3 = "";
-
+			//グループ分けされたFaceIdを数の多いものから順に3つ取得
 			int count1 = 0;
 			int count2 = 0;
 			int count3 = 0;
+			string url1 = "";
+			string url2 = "";
+			string url3 = "";
+			{
+
+				string faceId1 = "";
+				string faceId2 = "";
+				string faceId3 = "";
+				
+				List<string[]> groups = new List<string[]>();
+				foreach( string[] ids in responseOfFaceGroupAPI.groups ) {
+					groups.Add( ids );
+				}
+				groups.Sort( ( x , y ) => y.Length - x.Length );
+
+				count1 = groups[ 0 ].Length;
+				faceId1 = groups[ 0 ][ 0 ];
+
+				count2 = groups[ 1 ].Length;
+				faceId2 = groups[ 1 ][ 0 ];
+
+				count3 = groups[ 2 ].Length;
+				faceId3 = groups[ 2 ][ 0 ];
+				
+				url1 = this.sqlServiceServer.GetFaceUrl( faceId1 );
+				url2 = this.sqlServiceServer.GetFaceUrl( faceId2 );
+				url3 = this.sqlServiceServer.GetFaceUrl( faceId3 );
+
+			}
 			
 			//解析結果の通知
 			{
@@ -578,7 +610,7 @@ namespace LineBotCompanyTrip.Controllers {
 			//PostbackStatusの確認と更新
 			{
 
-				if( !this.sqlServiceServer.IsPostbackInitialization( isUserId , id ) ) {
+				if( this.sqlServiceServer.IsPostbackInitialization( isUserId , id ) ) {
 					Trace.TraceError( "Postback Is Not Initialization" );
 					Trace.TraceInformation( "Happiness Ranking Event End" );
 					return new HttpResponseMessage( HttpStatusCode.OK );
@@ -672,7 +704,7 @@ namespace LineBotCompanyTrip.Controllers {
 			//PostbackStatusの確認と更新
 			{
 
-				if( !this.sqlServiceServer.IsPostbackInitialization( isUserId , id ) ) {
+				if( this.sqlServiceServer.IsPostbackInitialization( isUserId , id ) ) {
 					Trace.TraceError( "Postback Is Not Initialization" );
 					Trace.TraceInformation( "Emotion Ranking Event End" );
 					return new HttpResponseMessage( HttpStatusCode.OK );

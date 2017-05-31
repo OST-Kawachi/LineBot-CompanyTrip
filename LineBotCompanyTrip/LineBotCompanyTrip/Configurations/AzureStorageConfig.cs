@@ -8,12 +8,22 @@
 		/// <summary>
 		/// アカウント名
 		/// </summary>
-		public static readonly string AccountName = "";
+		private static readonly string accountName = "";
+
+		/// <summary>
+		/// アカウント名
+		/// </summary>
+		public static string AccountName => accountName;
 
 		/// <summary>
 		/// アクセスキー
 		/// </summary>
-		public static readonly string AccessKey = "";
+		private static readonly string accessKey = "";
+
+		/// <summary>
+		/// アクセスキー
+		/// </summary>
+		public static string AccessKey => accessKey;
 
 	}
 
