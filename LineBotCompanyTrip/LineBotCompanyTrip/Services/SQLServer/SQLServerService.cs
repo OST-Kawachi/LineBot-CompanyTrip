@@ -1240,7 +1240,7 @@ namespace LineBotCompanyTrip.Services.SQLServer {
 
 				int lineId = this.GetLineId( connection , isUserId , id );
 
-				pictureId = this.GetMaxLineId( connection ) + 1;
+				pictureId = this.GetMaxPictureId( connection ) + 1;
 
 				this.InsertPicture( connection , pictureId , path , lineId );
 
