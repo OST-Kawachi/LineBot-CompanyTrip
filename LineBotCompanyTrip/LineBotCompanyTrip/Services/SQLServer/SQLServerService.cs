@@ -144,6 +144,7 @@ namespace LineBotCompanyTrip.Services.SQLServer {
 
 		/// <summary>
 		/// LineIdを取得する
+		/// 取得できなかった場合は新たにレコードを追加する
 		/// メソッド内でSqlConnection.Close()はしない
 		/// </summary>
 		/// <param name="alreadyOpenedConnection">既にSqlConnection.Open()が呼ばれているコネクション</param>
@@ -209,6 +210,18 @@ namespace LineBotCompanyTrip.Services.SQLServer {
 			}
 			
 			Trace.TraceInformation( "Line Id is : " + lineId );
+
+			if( lineId == -1 ) {
+
+				Trace.TraceWarning( "Get Line Id is FAILED" );
+
+				Trace.TraceWarning( "New Create Line Id" );
+
+				lineId = this.GetMaxLineId( alreadyOpenedConnection ) + 1;
+
+				this.InsertLine( alreadyOpenedConnection , lineId , isUserId , id );
+				
+			}
 			
 			Trace.TraceInformation( "Get Line Id End" );
 
