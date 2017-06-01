@@ -4,6 +4,7 @@ using System.IO;
 using LineBotCompanyTrip.Common;
 using LineBotCompanyTrip.Models.AzureCognitiveServices.EmotionAPI;
 using System.Diagnostics;
+using System;
 
 namespace LineBotCompanyTrip.Services.ProcessPicture {
 
@@ -224,9 +225,152 @@ namespace LineBotCompanyTrip.Services.ProcessPicture {
 				text
 			);
 
+			pictureBytes = this.ResizePicture(
+				pictureBytes ,
+				response.faceRectangle.top ,
+				response.faceRectangle.left ,
+				response.faceRectangle.height ,
+				response.faceRectangle.width
+			);
+
 			Trace.TraceInformation( "Draw Analysis On Picture End" );
 
 			return pictureBytes;
+
+		}
+		
+		/// <summary>
+		/// 画像を縦横比1:1.51に合わせてサイズを変更する
+		/// できるだけ認識された顔画像が中央にくるように調節
+		/// </summary>
+		/// <param name="pictureBytes">加工用画像</param>
+		/// <param name="top">左上座標（上）</param>
+		/// <param name="left">左上座標（左）</param>
+		/// <param name="height">顔サイズ（高さ）</param>
+		/// <param name="width">顔サイズ（横）</param>
+		/// <returns>リサイズされた画像</returns>
+		private byte[] ResizePicture( byte[] pictureBytes , int top , int left , int height , int width ) {
+
+			Trace.TraceInformation( "Resize Picture Start" );
+
+			Trace.TraceInformation( "Face Pos is : ( " + left + " , " + top + " )" );
+			Trace.TraceInformation( "Face Size is : ( " + width + " , " + height + " )" );
+
+			MemoryStream pictureStream = null;
+			Bitmap bitmap = null;
+			try {
+				pictureStream = new MemoryStream( pictureBytes );
+				bitmap = new Bitmap( pictureStream );
+			}
+			catch( ArgumentException e ) {
+
+				Trace.TraceError( "Resize Picture Argument Exception : " + e.Message );
+
+				pictureStream?.Dispose();
+				bitmap?.Dispose();
+				Trace.TraceInformation( "Resize Picture End" );
+
+				return pictureBytes;
+
+			}
+
+			//キャンバスのサイズ取得
+			int canvasSizeWidth = 0;
+			int canvasSizeHeight = 0;
+			{
+
+				canvasSizeWidth = bitmap.Size.Width;
+				canvasSizeHeight = bitmap.Size.Height;
+
+				Trace.TraceInformation( "Picture Size is ( " + canvasSizeWidth + " , " + canvasSizeHeight + " )" );
+
+				//キャンバスの比率を合わせる
+				if( canvasSizeWidth < canvasSizeHeight * 1.51 )
+					canvasSizeHeight = (int)( canvasSizeWidth / 1.51 );
+				else
+					canvasSizeWidth = (int)( canvasSizeHeight * 1.15 );
+				
+				Trace.TraceInformation( "Resized Picture Size is ( " + canvasSizeWidth + " , " + canvasSizeHeight + " )" );
+
+				//顔サイズが小さかった場合、顔高さ：キャンバス高さが1:2になるまでキャンバスサイズを小さくする
+				if( height * 2 < canvasSizeHeight ) {
+					canvasSizeHeight = (int)( canvasSizeHeight * height * 2 / canvasSizeHeight );
+					canvasSizeWidth = (int)( canvasSizeWidth * height * 2 / canvasSizeHeight );
+				}
+				
+			}
+
+			Bitmap canvas = null;
+			try {
+				canvas = new Bitmap( canvasSizeWidth , canvasSizeHeight );
+			}
+			catch( Exception e ) {
+
+				Trace.TraceError( "Resize Picture Exception : " + e.Message );
+
+				canvas?.Dispose();
+				bitmap?.Dispose();
+				pictureStream?.Dispose();
+
+				Trace.TraceInformation( "Resize Picture End" );
+
+				return pictureBytes;
+
+			}
+
+			Graphics graphics = Graphics.FromImage( canvas );
+
+			//bitmapから切り取る部分を取得する
+			int cutPosX = 0;
+			int cutPosY = 0;
+			{
+
+				int faceCenterX = left + ( width / 2 );
+				int faceCenterY = top + ( height / 2 );
+
+				cutPosX = faceCenterX - ( canvasSizeWidth / 2 );
+				cutPosY = faceCenterY - ( canvasSizeHeight / 2 );
+				
+				Trace.TraceInformation( "Cut Pos is ( " + cutPosX + " , " + cutPosY + " )" );
+
+			}
+
+			//キャンバスのサイズ分切り取る
+			Rectangle srcRect = new Rectangle( cutPosX , cutPosY , canvasSizeWidth , canvasSizeHeight );
+
+			//座標(0,0)からキャンバスのサイズ分だけ描画（キャンバスサイズ分トリミング）
+			Rectangle destRect = new Rectangle( 0 , 0 , canvasSizeWidth , canvasSizeHeight );
+
+			try {
+				graphics.DrawImage( bitmap , destRect , srcRect , GraphicsUnit.Pixel );
+			}
+			catch( ArgumentException e ) {
+
+				Trace.TraceError( "Resize Picture Argument Exception : " + e.Message );
+
+				graphics.Dispose();
+				canvas?.Dispose();
+				bitmap?.Dispose();
+				pictureStream?.Dispose();
+
+				Trace.TraceInformation( "Resize Picture End" );
+
+				return pictureBytes;
+
+			}
+			MemoryStream savedStream = new MemoryStream();
+			canvas.Save( savedStream , ImageFormat.Jpeg );
+			byte[] bytes = savedStream.GetBuffer();
+
+			graphics.Dispose();
+			bitmap.Dispose();
+			canvas.Dispose();
+			pictureStream.Dispose();
+			savedStream.Dispose();
+			
+			Trace.TraceInformation( "Resize Picture End" );
+
+			return bytes;
 
 		}
 
