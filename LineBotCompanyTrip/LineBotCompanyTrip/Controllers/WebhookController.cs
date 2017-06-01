@@ -328,6 +328,13 @@ namespace LineBotCompanyTrip.Controllers {
 									.AddMessageAction( "いいね！" , "いいね" )
 									.GetActions()
 						);
+
+						//5枚おきにカルーセルを変更する
+						if( i == 5 * 1 - 1 || i == 5 * 2 - 1 || i == 5 * 3 - 1 || i == 5 * 4 - 1 || i == 5 * 5 - 1 ) {
+							replyMessageService.AddCarouselMessage( "解析" , columnCreator.GetColumns() );
+							columnCreator.CreateColumn();
+						}
+
 					}
 					await replyMessageService.AddCarouselMessage( "解析" , columnCreator.GetColumns() ).Send();
 
